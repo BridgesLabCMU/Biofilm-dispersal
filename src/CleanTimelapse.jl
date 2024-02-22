@@ -1,24 +1,16 @@
 using TiffImages: load, save, ifds, IMAGEDESCRIPTION
 using Images: channelview, Gray, N0f16 
-using ImageTransformations: imresize
-using Interpolations: Linear
 using NaturalSort: sort, natural
 using StatsBase: mean, std
-using ImageMorphology: closing, tophat
-using ProgressMeter
+using ImageMorphology: closing, tophat!
 
 include("Preprocessing.jl")
 include("RemovePlanktonicCells.jl")
 using .Preprocessing
 using .RemovePlanktonicCells
 
-function load_raw_images(file)
-    if isdir(file[1:end-10]*"processed")
-        rm(file[1:end-10]*"processed"; recursive = true)
-	end
-	mkdir(file[1:end-10]*"processed") 
-    dir = file[1:end-10]*"processed"
-    timeseries = load(file)
+function load_raw_images(file_directory, file)
+    timeseries = load(file_directory*file)
     height, width, zt = size(timeseries)
     ImageJ_metadata = first(ifds(timeseries))[IMAGEDESCRIPTION].data
     xy_res = 0.065
@@ -44,13 +36,14 @@ function main()
     # Preprocessing
     ##############################
 
-    file = "cheY_replicate1_noback.tif" 
-	if isdir(file[1:end-10]*"processed")
-        rm(file[1:end-10]*"processed"; recursive = true)
+    timeseries_file = "cheY_replicate1_denoised.tif" 
+    file_directory = "/mnt/h/Dispersal/"
+	if isdir(file_directory*timeseries_file[1:end-12]*"processed")
+        rm(file_directory*timeseries_file[1:end-12]*"processed"; recursive = true)
 	end
-	mkdir(file[1:end-10]*"processed") 
-    dir = file[1:end-10]*"processed"
-    timeseries, aspect_ratio = load_raw_images(file)
+    dir = file_directory*timeseries_file[1:end-12]*"processed"
+	mkdir(dir) 
+    timeseries, aspect_ratio = load_raw_images(file_directory, timeseries_file)
     height, width, slices, frames = size(timeseries)
     registered = similar(timeseries)
     center = frames ÷ 2
@@ -58,31 +51,34 @@ function main()
     timeseries = nothing
     cropped = reinterpret(Gray{N0f16}, crop(registered))
     height, width, slices, frames = size(cropped)
+    @show height, width, slices, frames
     registered = nothing
     timepoint_thresh = timepoint_threshold(cropped, height, width, slices, frames, cell_threshold)
-    #noback = tophat(cropped; dims=(1,2), r=15)
-    cropped = imresize(cropped, ratio=(1,1,aspect_ratio,1), method=Linear())
-    write_images!(cropped, frames, dir, aspect_ratio)
-    height, width, slices, frames = size(cropped)
-    intensity_thresholds = Array{Gray{N0f16}, 1}(undef, slices)
-    mask_thresholds!(cropped, intensity_thresholds, slices, cell_threshold)
+    
+    noback = similar(cropped)
+    for t in 1:frames
+        for i in 1:slices
+            @views buffer = similar(cropped[:,:,i,t])
+            @views tophat!(noback[:,:,i,t], cropped[:,:,i,t], buffer; r=15)
+            buffer = nothing
+        end
+    end
+
     cropped = nothing
+    write_images!(noback, frames, dir, aspect_ratio)
+    intensity_thresholds = Array{Gray{N0f16}, 1}(undef, slices)
+    mask_thresholds!(noback, intensity_thresholds, slices, cell_threshold)
+    noback = nothing
 
     ##############################
     # Planktonic cell removal
     ##############################
 
-    if isdir(file[1:end-10]*"processed")
-        dir = file[1:end-10]*"processed"
-    else
-        error("Directory does not exist")
-	end
-
     files = sort([f for f in readdir(dir) if occursin("stack", f)], 
                  lt=natural)
 
     prev_mask = zeros(Bool, (height, width, slices))
-    @showprogress dt=1 desc="Removing planktonic cells..." for t in 2:frames
+    for t in 2:frames
         # Preparing to run isolate_biofilm function
         if t < timepoint_thresh || timepoint_thresh < 2
             curr_cv = nothing

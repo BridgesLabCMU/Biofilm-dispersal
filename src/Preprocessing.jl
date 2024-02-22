@@ -1,8 +1,6 @@
 module Preprocessing
 
 using Images: warp 
-using ImageTransformations: imresize
-using Interpolations: Linear
 using TiffImages: save
 using ImageMorphology: tophat
 using CoordinateTransformations: Translation
@@ -119,14 +117,14 @@ function crop(img_stack)
     j2 = findlast(mask_j)
     z1 = findfirst(mask_z)
     z2 = findlast(mask_z)
-    cropped_stack = img_stack[i1:i2, j1:j2, z1:z2, :]
+    @views cropped_stack = img_stack[i1:i2, j1:j2, z1:z2, :]
     return cropped_stack
 end
 
 function register!(img_stack, registered_stack, nframes, center)       
     @views reference = img_stack[:,:,:,center]
     @floop for t in 1:nframes
-        moving = img_stack[:,:,:,t]
+        @views moving = img_stack[:,:,:,t]
         shift, _, _ = phase_offset(reference, moving, upsample_factor=10)
         shift = Translation(-1*shift[1], -1*shift[2], -1*shift[3])
         registered_stack[:,:,:,t] = warp(moving, shift, axes(moving), 1)
@@ -146,7 +144,6 @@ function timepoint_threshold(timeseries, height, width, slices, frames, cell_thr
     first_timepoints = fill(-1, (height, width, slices))
     timepoint_mask!(timeseries, first_timepoints, frames, cell_threshold)
     timepoint_thresh = find_threshold(first_timepoints, Otsu())
-    first_timepoints = nothing
     return timepoint_thresh
 end
 
@@ -166,7 +163,8 @@ end
 
 function write_images!(timeseries, frames, dir, aspect_ratio)
     @floop for t in 1:frames
-        save("$dir/stack_$(t).tif", timeseries[:,:,:,t])
+        @views isotropic = timeseries[:,:,:,t]
+        save("$dir/stack_$(t).tif", isotropic)
     end
 end
 
