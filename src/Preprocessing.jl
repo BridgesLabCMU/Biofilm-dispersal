@@ -13,7 +13,7 @@ using FFTW
 using Statistics
 using TensorOperations
 
-export write_images!, register!, crop, mask_thresholds!, timepoint_threshold
+export write_images!, register!, crop, mask_thresholds!, rolling_ball!, timepoint_threshold
 
 function phase_offset(source, target; kwargs...)
     plan = plan_fft(source)
@@ -119,6 +119,15 @@ function crop(img_stack)
     z2 = findlast(mask_z)
     @views cropped_stack = img_stack[i1:i2, j1:j2, z1:z2, :]
     return cropped_stack
+end
+
+function rolling_ball!(timeseries, noback, slices, frames)
+    @floop for t in 1:frames
+        @inbounds for i in 1:slices
+            noback[:,:,i,t] = @views tophat(timeseries[:,:,i,t]; r=15)
+        end
+    end
+    return nothing
 end
 
 function register!(img_stack, registered_stack, nframes, center)       
