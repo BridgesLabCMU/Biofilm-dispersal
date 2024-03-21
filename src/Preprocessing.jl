@@ -170,7 +170,7 @@ function mask_thresholds!(timeseries, intensity_thresholds, slices, cell_thresho
 end
 
 
-function write_images!(timeseries, frames, dir, aspect_ratio)
+function write_images!(timeseries, frames, dir)
     @floop for t in 1:frames
         @views isotropic = timeseries[:,:,:,t]
         save("$dir/stack_$(t).tif", isotropic)
