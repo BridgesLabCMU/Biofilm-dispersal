@@ -59,11 +59,11 @@ function crop(img_stack)
 end
 
 function stack_preprocess(img_stack, normalized_stack, registered_stack,
-                        blockDiameter, shift_thresh, fpMean, nframes, mxshift, sig)       
+                        blockDiameter, shift_thresh, fpMean, nframes, mxshift, sig, constitutive)       
     shifts = (0.0, 0.0) 
     @inbounds for t in 1:nframes
-        img = img_stack[:,:,t]
-        img_copy = img_stack[:,:,t] 
+        img = img_stack[:,:,constitutive,t]
+        img_copy = img_stack[:,:,constitutive,t] 
         img_normalized = normalize_local_contrast(img, img_copy, 
                                     blockDiameter, fpMean)
         normalized_stack[:,:,t] = imfilter(img_normalized, Kernel.gaussian(sig))
@@ -76,29 +76,29 @@ function stack_preprocess(img_stack, normalized_stack, registered_stack,
             if sqrt(shift[1]^2 + shift[2]^2) >= mxshift
                 shift = Translation(shifts[1], shifts[2])
                 registered_stack[:,:,t] = warp(moving, shift, axes(fixed))
-                img_stack[:,:,t] = warp(img_stack[:,:,t], shift, axes(fixed))
+                img_stack[:,:,:,t] = warp(img_stack[:,:,:,t], shift, axes(fixed))
             else
                 shift = Tuple([-1*shift[1], -1*shift[2]])
                 shift = shift .+ shifts
                 shifts = shift
                 shift = Translation(shift[1], shift[2])
                 registered_stack[:,:,t] = warp(moving, shift, axes(fixed))
-                img_stack[:,:,t] = warp(img_stack[:,:,t], shift, axes(fixed))
+                img_stack[:,:,:,t] = warp(img_stack[:,:,:,t], shift, axes(fixed))
             end
         end
     end
     processed_stack, crop_indices = crop(registered_stack)
     row_min, row_max, col_min, col_max = crop_indices
-    img_stack = img_stack[row_min:row_max, col_min:col_max, :]
+    img_stack = img_stack[row_min:row_max, col_min:col_max, :, :]
     return img_stack, processed_stack
 end
 
 function compute_mask!(stack, raw_stack, masks, 
-                        sig, fixed_thresh, ntimepoints)
+                        sig, fixed_thresh, ntimepoints, constitutive)
     @inbounds for t in 1:ntimepoints
         @views img = stack[:,:,t]
         plank_mask = img .> fixed_thresh 
-        @views plank = plank_mask .* raw_stack[:,:,t] 
+        @views plank = plank_mask .* raw_stack[:,:,constitutive,t] 
         flattened_plank = vec(plank)
         plank_pixels = filter(x -> x != 0, flattened_plank)
         plank_avg = mean(plank_pixels)
@@ -108,71 +108,67 @@ function compute_mask!(stack, raw_stack, masks,
 	end
 end
 
-function output_images!(stack, masks, overlay, dir, well)
+function output_images!(stack, masks, overlay, output_dir)
     flat_stack = vec(stack)
     img_min = quantile(flat_stack, 0.0035)
     img_max = quantile(flat_stack, 0.9965)
     adjust_histogram!(stack, LinearStretching(src_minval=img_min, src_maxval=img_max, 
                                               dst_minval=0, dst_maxval=1))
-    save("$dir/results_images/$well"*".tif", stack)
+    save("$output_dir/constitutive.tif", stack)
     @inbounds for i in CartesianIndices(stack)
         gray_val = RGB{N0f8}(stack[i], stack[i], stack[i])
         overlay[i] = masks[i] ? RGB{N0f8}(1, 0, 0) : gray_val
     end
-    save("$dir/results_images/$well"*"mask.tif", overlay)
+    save("$output_dir/constitutive_mask.tif", overlay)
 end
 
 function main()
-    dir  = "/mnt/f/Sandhya_Imaging/Time_Lapses/" 
-    images = sort([f for f in readdir(dir) if occursin(".ome.tif", f)], lt=natural)
+    dir = "/mnt/f/Sandhya_Imaging/Time_Lapses/" 
+    files = sort([f for f in readdir(dir, join=true) if occursin(".ome.tif", f)], lt=natural)
     blockDiameter = 101 
     shift_thresh = 100 
-	if isdir("$dir/results_images")
-		rm("$dir/results_images"; recursive = true)
-	end
-	if isdir("$dir/results_data")
-		rm("$dir/results_data"; recursive = true)
-	end
-	mkdir("$dir/results_images")
-	mkdir("$dir/results_data")
-	output_file = "$dir/results_data/BF_imaging.csv"
-	data_matrix = Array{Float64, 2}(undef, ntimepoints, num_wells)
-	all_wells = vcat(values(conditions)...)
-	conditions = values(conditions)
-	@inbounds for (i, wells) in enumerate(conditions)
-		@inbounds for j in eachindex(wells)
-			images = Array{Gray{N0f16}, 3}(undef, height, width, ntimepoints)
-			well = wells[j]
-			well_files = sort([f for f in readdir(dir) if occursin(well*"_", f)], 
-						 lt=natural)
-			read_images!(well, dir, height, width, ntimepoints, images, well_files)
-			images = Float64.(images)
-			normalized_stack = similar(images)
-			registered_stack = similar(images)
-			fpMax = maximum(images) 
-			fpMin = minimum(images) 
-			fpMean = (fpMax - fpMin) / 2.0 + fpMin
-			fixed_thresh = fpMean - 0.04
-			images, output_stack = stack_preprocess(images, normalized_stack,
-													registered_stack, blockDiameter,
-													shift_thresh, fpMean, ntimepoints, 
-													shift_thresh, sig)
-			masks = zeros(Bool, size(images))
-			compute_mask!(output_stack, images, masks, sig, 
-						  fixed_thresh, ntimepoints)
-			output_stack = Gray{N0f8}.(output_stack)
-			overlay = zeros(RGB{N0f8}, size(output_stack)...)
-			output_images!(output_stack, masks, overlay, dir, well)
-			let images = images
-				@floop for t in 1:ntimepoints
-					@inbounds signal = @views mean((1 .- images[:,:,t]) .* masks[:,:,t])
-					@inbounds data_matrix[t, i*j] = signal 
-				end
-			end
-		end # loop over wells for a condition 
-	end # loop over conditions 
-	df = DataFrame(data_matrix, Symbol.(all_wells))
-	df .= ifelse.(isnan.(df), 0, df)
-	write(output_file, df)
+    constitutive = 1 # index for constitutive channel
+    reporter = 2 # index for reporter channel
+    for file in files
+        if isdir("$dir/results_images_"*basename(file)[1:end-8])
+            rm("$dir/results_images_"*basename(file)[1:end-8]; recursive = true)
+        end
+        if isdir("$dir/results_data_"*basename(file)[1:end-8])
+            rm("$dir/results_data_"*basename(file)[1:end-8]; recursive = true)
+        end
+        output_img_dir = "$dir/results_images_"*basename(file)[1:end-8]
+        output_data_dir = "$dir/results_data_"*basename(file)[1:end-8]
+        mkdir(output_img_dir)
+        mkdir(output_data_dir)
+        output_file = "$output_data_dir/data.csv"
+        images = Float64.(sum(load(file), dims=4)) # TODO: check dims
+        height, width, channels, ntimepoints = size(images)
+        data_matrix = Array{Float64, 1}(undef, ntimepoints)
+        normalized_stack = images[:,:,constitutive,:]
+        registered_stack = images[:,:,constitutive,:]
+        @views fpMax = maximum(images[:,:,constitutive,:]) 
+        @views fpMin = minimum(images[:,:,constitutive,:]) 
+        fpMean = (fpMax - fpMin) / 2.0 + fpMin
+        fixed_thresh = fpMean - 0.04
+        images, output_stack = stack_preprocess(images, normalized_stack,
+                                                registered_stack, blockDiameter,
+                                                shift_thresh, fpMean, ntimepoints, 
+                                                shift_thresh, sig, constitutive)
+        @views masks = zeros(Bool, size(images[:,:,constitutive,:]))
+        compute_mask!(output_stack, images, masks, sig, 
+                      fixed_thresh, ntimepoints, constitutive)
+        output_stack = Gray{N0f8}.(output_stack)
+        overlay = zeros(RGB{N0f8}, size(output_stack)...)
+        output_images!(output_stack, masks, overlay, dir, well)
+        let images = images
+            @floop for t in 1:ntimepoints
+                @inbounds signal = @views mean((images[:,:,reporter,t] ./ images[:,:,constitutive,t]) .* masks[:,:,t])
+                @inbounds data_matrix[t] = signal 
+            end
+        end
+        df = DataFrame(data_matrix)
+        df .= ifelse.(isnan.(df), 0, df)
+        write(output_file, df)
+    end
 end
 main()
