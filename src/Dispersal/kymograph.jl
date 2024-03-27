@@ -28,12 +28,12 @@ function radial_averaging(files, images_folder, first_index, end_index, bin_inte
     bins = 0:bin_interval:max_distance
     nbins = length(bins)
     ntimepoints = end_index - first_index + 1
-    data_matrix = zeros(nbins, ntimepoints)
+    data_matrix = zeros(nbins-1, ntimepoints)
     for t in 1:ntimepoints
         mask = load("$images_folder/$(files[t+first_index-1])")
         mask[mask .> 0] .= 1
-        for i in eachindex(bins)
-            data_matrix[i, t] = mean(mask[center_distance .∈ (bins[i],)])
+        for i in 1:size(data_matrix, 1) 
+            data_matrix[i, t] = mean(mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
     end
     return data_matrix
@@ -75,7 +75,7 @@ function main()
         ytick_interval = n/0.065/30
         xs = 0:6:size(data_matrix, 2)-1
         ys = 0:ytick_interval:size(data_matrix, 1)-1
-        c = cgrad(:default, rev=true)
+        c = cgrad(:Purples, rev=true)
         plt = heatmap(data_matrix, xticks=xs, yticks=ys, color=c, clim=(-0.1, 0),
                       colorbar_title="Density change (a.u.)", xformatter=xi -> xi*1/6, 
                       yformatter=yi -> yi/ytick_interval*n, size=plot_size)

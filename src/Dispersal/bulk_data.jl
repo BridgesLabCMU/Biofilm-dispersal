@@ -23,7 +23,6 @@ function write_images!(binary_timeseries, frames, dir)
     end
 end
 
-
 function mask_thresholds!(timeseries, intensity_thresholds, slices, cell_threshold)
     @floop for i in 1:slices 
         @views slice_ = timeseries[:, :, i, :]
@@ -51,7 +50,7 @@ function main()
         height, width, slices = size(dummy_image)
         timeseries = zeros(Gray{N0f16}, height, width, slices, ntimepoints)
         read_images!(images_folder, ntimepoints, timeseries, files)
-        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1))
+        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1)) # TODO: Change to WarpedView
         height, width, slices, ntimepoints = size(timeseries)
         intensity_thresholds = zeros(slices)
         mask_thresholds!(timeseries, intensity_thresholds, slices, 3.0e-5)

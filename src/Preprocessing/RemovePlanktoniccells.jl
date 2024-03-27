@@ -1,17 +1,3 @@
-module RemovePlanktonicCells
-
-using Revise
-using ImageMorphology: mreconstruct, dilate, closing, opening, 
-                            strel, label_components, component_lengths
-using Images: distance_transform, feature_transform
-using ColorTypes: Gray, N0f16
-using TiffImages: save, load
-using StatsBase: mean, std
-using HistogramThresholding: find_threshold, Otsu
-using FLoops
-
-export isolate_biofilm!, strel_circle, mask_prep! 
-
 function strel_circle(radius)
     diameter = 2 * radius + 1
     mask = zeros(Bool, (diameter, diameter))
@@ -59,5 +45,3 @@ function isolate_biofilm!(curr_mask, prev_mask, closed_prev, slices, t, timepoin
         curr_mask .*= (closed_prev .* classify_pixels(curr_mask, prev_mask))
     end
 end
-
-end # module

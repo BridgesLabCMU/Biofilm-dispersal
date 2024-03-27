@@ -1,20 +1,3 @@
-module Preprocessing
-
-using Images: warp 
-using TiffImages: save
-using ImageMorphology: tophat
-using CoordinateTransformations: Translation
-using HistogramThresholding: find_threshold, Otsu
-using FLoops
-using Revise
-using AbstractFFTs
-using Compat
-using FFTW
-using Statistics
-using TensorOperations
-
-export write_images!, register!, crop, mask_thresholds!, rolling_ball!, timepoint_threshold
-
 function phase_offset(source, target; kwargs...)
     plan = plan_fft(source)
     return phase_offset(plan, plan * source, plan * target; kwargs...)
@@ -176,5 +159,3 @@ function write_images!(timeseries, frames, dir)
         save("$dir/stack_$(t).tif", isotropic)
     end
 end
-
-end # module
