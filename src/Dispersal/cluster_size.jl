@@ -2,6 +2,40 @@ using Plots
 using TiffImages: load, save
 using ImageMorphology: label_components, component_lengths
 using StatsBase: Histogram, fit
+using Interpolations
+using FileIO
+
+function deform_image!(deformed_image, image, displacements_folder, first_timepoint, current_timepoint)
+    x_grid, y_grid, z_grid, u_tot = load("$displacements_folder/piv_results_$(first_timepoint).jld2", 
+                                         "x", "y", "z", "u")
+    y_grid = y_grid[end:-1:1]
+    u_tot .= 0
+    v_tot = zeros(Float32, size(u))
+    w_tot = zeros(Float32, size(u))
+    for t in first_timepoint:current_timepoint-1
+        u, v, w = load("$displacements_folder/piv_results_$(t).jld2", "u", "v", "w")
+        u_tot .+= u
+        v_tot .+= v
+        w_tot .+= w
+    end
+    v_tot .*= -1
+    h, w, d = size(image)
+    x = 1:w
+    y = 1:h
+    z = 1:d
+    itp_u_img = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, z_grid)), Line())
+    itp_v_img = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, z_grid)), Line())
+    itp_w_img = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, z_grid)), Line())
+    ut = itp_u_img(y, x, z)
+    vt = itp_v_img(y, x, z)
+    wt = itp_w_img(y, x, z)
+    itp_img = extrapolate(interpolate(image, BSpline(Cubic(Line(OnGrid())))), Line())
+    deformed_image .= itp_img.(y .+ vt, x .+ ut, z .+ wt)
+    return nothing
+end
 
 function cluster_sizes!(binary_timeseries, ntimepoints, conversion_factor, clusters_time)
     @inbounds for t in 2:ntimepoints

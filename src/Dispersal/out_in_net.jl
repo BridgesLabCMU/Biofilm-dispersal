@@ -67,7 +67,7 @@ function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
-        plot_filename = basename(images_folder)*"_out_in" 
+        plot_filename = basename(images_folder)*"_out_in_net" 
         if isfile("$plots_folder/$plot_filename"*".svg")
             continue
         end
