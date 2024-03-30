@@ -62,7 +62,7 @@ function main()
         write_images!(masks, ntimepoints, images_folder)
         @views net = sum(masks, dims=(1:3))[1,1,1,:] 
         writedlm("$(plots_folder)/$(filename).csv", net, ",")
-        writedlm("$(plots_folder)/isotropic_intensity_thresholds.csv", intensity_thresholds, ",")
+        writedlm("$(images_folder)/isotropic_intensity_thresholds.csv", intensity_thresholds, ",")
         masks = nothing
     end
 end

@@ -1,11 +1,12 @@
+using TiffImages
 using Plots
 using LaTeXStrings
-using TiffImages: load, save
 using NaturalSort: sort, natural
 using StatsBase
 using ColorTypes: Gray, N0f16
 using ImageMorphology: label_components, component_lengths, component_centroids
 using Images: imresize, distance_transform, feature_transform
+using ImageView
 using HistogramThresholding: find_threshold, Otsu
 using FLoops
 using DelimitedFiles
@@ -16,15 +17,15 @@ pgfplotsx()
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function deform_image!(deformed_image, image, displacements_folder, first_timepoint, current_timepoint)
-    x_grid, y_grid, z_grid, u_tot = load("$displacements_folder/piv_results_$(first_timepoint).jld2", 
+function deform_image(image, displacements_folder, first_timepoint, current_timepoint)
+    x_grid, y_grid, z_grid, u_tot = FileIO.load("$displacements_folder/piv_results_$(first_timepoint).jld2", 
                                          "x", "y", "z", "u")
     y_grid = y_grid[end:-1:1]
     u_tot .= 0
-    v_tot = zeros(Float32, size(u))
-    w_tot = zeros(Float32, size(u))
+    v_tot = zeros(Float32, size(u_tot))
+    w_tot = zeros(Float32, size(u_tot))
     for t in first_timepoint:current_timepoint-1
-        u, v, w = load("$displacements_folder/piv_results_$(t).jld2", "u", "v", "w")
+        u, v, w = FileIO.load("$displacements_folder/piv_results_$(t).jld2", "u", "v", "w")
         u_tot .+= u
         v_tot .+= v
         w_tot .+= w
@@ -44,20 +45,23 @@ function deform_image!(deformed_image, image, displacements_folder, first_timepo
     vt = itp_v_img(y, x, z)
     wt = itp_w_img(y, x, z)
     itp_img = extrapolate(interpolate(image, BSpline(Cubic(Line(OnGrid())))), Line())
-    deformed_image .= itp_img.(y .+ vt, x .+ ut, z .+ wt)
-    return nothing
+    deformed_image = itp_img.(y .+ vt, reshape(x, 1,:,1) .+ ut, reshape(z, 1,1,:) .+ wt)
+    imshow(deformed_image)
+    return deformed_image 
 end
 
 function mask_image!(intensity_thresholds, mask, deformed_image)
     slices = size(deformed_image, 3)
     for i in 1:slices
-        masks[:,:,i] = @views deformed_image[:,:,i] .> intensity_thresholds[i]
+        mask[:,:,i] = @views deformed_image[:,:,i] .> intensity_thresholds[i]
     end
 end
 
 function radial_averaging(mask_files, files, images_folder, first_index, end_index, bin_interval, intensity_thresholds, displacements_folder)
-    first_image = load("$images_folder/$(mask_files[first_index])")
-    labels = label_components(first_image)
+    first_image = TiffImages.load("$images_folder/$(files[first_index])")
+    first_mask = zeros(Bool, size(first_image))
+    mask_image!(intensity_thresholds, first_mask, first_image)
+    labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
     center = centers[argmax(volumes[1:end])]
@@ -71,13 +75,12 @@ function radial_averaging(mask_files, files, images_folder, first_index, end_ind
     ntimepoints = end_index - first_index + 1
     data_matrix = zeros(nbins-1, ntimepoints)
     for t in 1:ntimepoints
-        image = load("$images_folder/$(files[t+first_index-1])")
+        image = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-1])"))
         mask = zeros(Bool, size(image))
         if t == 1
             mask_image!(intensity_thresholds, mask, image)
         else
-            deformed_image = similar(image)
-            deform_image!(deformed_image, image, displacements_folder, first_index, t+first_index-1)
+            deformed_image = deform_image(image, displacements_folder, first_index, t+first_index-1)
             mask_image!(intensity_thresholds, mask, deformed_image)
         end
         for i in 1:size(data_matrix, 1) 
@@ -103,16 +106,16 @@ function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
-        plot_filename = basename(images_folder)*"_data" 
+        plot_filename = basename(images_folder)*"_data_deformed" 
         displacements_folder = "$(images_folder)/Displacements"
-        intensity_thresholds_file = "$(images_folder)/intensity_thresholds.csv" 
-        files = sort([f for f in readdir(images_folder) if occursin("noplank_isotropic", f)], 
+        intensity_thresholds_file = "$(images_folder)/isotropic_intensity_thresholds.csv" 
+        files = sort([f for f in readdir(images_folder) if occursin("no_plank", f)], 
                                  lt=natural)
-        files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
+        mask_files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
                                  lt=natural)
-        intensity_thresholds = readdlm(intensity_thresholds_folder, ',', Float64)[1:end,1]
+        intensity_thresholds = readdlm(intensity_thresholds_file, ',', Float64)[1:end,1]
         ntimepoints = length(files)
-        first_image = load("$images_folder/$(files[1])"; lazyio=true)
+        first_image = TiffImages.load("$images_folder/$(files[1])"; lazyio=true)
         height, width, slices = size(first_image)
         first_image = nothing
         net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
