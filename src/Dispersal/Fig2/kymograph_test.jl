@@ -26,36 +26,21 @@ end
 
 
 function deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_folder, current_timepoint, intensity_thresholds)
-    """
-    Dipsersed areas using deformation by creating the image "expected" if displacement were the only factor 
-    changing pixel values.
-
-    We compute this image by taking image t-1 and its displacements to the next image
-    Interpolate the displacements to the pixel level and round to the nearest pixel
-    Set pixels to 0 if their displacement is >0.
-    Then add the values of all pixels moving into each position.
-
-    To get a mask of dispersed regions, expected image - actual image t. Negative values represent growth, positive represent dispersal
-
-    Initialize a 3D array of zeros. For each pixel, set it to the value in image t-1 if displacement is zero. Else add its value in image t-1
-    to the pixel at idx + displacement
-    """
-
     x_grid, y_grid, z_grid, u, v, w = FileIO.load("$displacements_folder/piv_results_$(current_timepoint).jld2", 
                                          "x", "y", "z", "u", "v", "w")
     y_grid = y_grid[end:-1:1]
-    v_tot .*= -1
+    v .*= -1
     
-    h, w, d = size(image_t)
-    x = 1:w
-    y = 1:h
-    z = 1:d
-    itp_u_img = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
-                                  (y_grid, x_grid, z_grid)), Line())
-    itp_v_img = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
-                                  (y_grid, x_grid, z_grid)), Line())
-    itp_w_img = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
-                                  (y_grid, x_grid, z_grid)), Line())
+    height, width, depth = size(image_t)
+    x = 1:width
+    y = 1:height
+    z = 1:depth
+    itp_u_img = extrapolate(scale(interpolate(u, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, (z_grid.-1).*4 .+ 1)), Line())
+    itp_v_img = extrapolate(scale(interpolate(v, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, (z_grid.-1).*4 .+ 1)), Line())
+    itp_w_img = extrapolate(scale(interpolate(w, BSpline(Cubic(Line(OnGrid())))), 
+                                  (y_grid, x_grid, (z_grid.-1).*4 .+ 1)), Line())
     ut = itp_u_img(y, x, z)
     vt = itp_v_img(y, x, z)
     wt = itp_w_img(y, x, z)
@@ -66,8 +51,8 @@ function deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_fo
         else
             xi = i[2] + round(Int, ut[i])
             yi = i[1] + round(Int, vt[i])
-            zi = i[3] + round(Int, wt[i])
-            if 1 <= xi <= w && 1 <= yi <= h && 1 <= zi <= d
+            zi = i[3] + round(Int, wt[i] * 4)
+            if 1 <= xi <= width && 1 <= yi <= height && 1 <= zi <= depth
                 deformed_img[yi, xi, zi] += image_tm1[i]
             end
         end
