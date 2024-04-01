@@ -17,7 +17,15 @@ pgfplotsx()
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function deform_image(image, displacements_folder, first_timepoint, current_timepoint)
+function mask_image!(intensity_thresholds, mask, deformed_image)
+    slices = size(deformed_image, 3)
+    for i in 1:slices
+        mask[:,:,i] = @views deformed_image[:,:,i] .> intensity_thresholds[i]
+    end
+end
+
+
+function deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_folder, current_timepoint, intensity_thresholds)
     """
     Dipsersed areas using deformation by creating the image "expected" if displacement were the only factor 
     changing pixel values.
@@ -28,21 +36,17 @@ function deform_image(image, displacements_folder, first_timepoint, current_time
     Then add the values of all pixels moving into each position.
 
     To get a mask of dispersed regions, expected image - actual image t. Negative values represent growth, positive represent dispersal
+
+    Initialize a 3D array of zeros. For each pixel, set it to the value in image t-1 if displacement is zero. Else add its value in image t-1
+    to the pixel at idx + displacement
     """
-    x_grid, y_grid, z_grid, u_tot = FileIO.load("$displacements_folder/piv_results_$(first_timepoint).jld2", 
-                                         "x", "y", "z", "u")
+
+    x_grid, y_grid, z_grid, u, v, w = FileIO.load("$displacements_folder/piv_results_$(current_timepoint).jld2", 
+                                         "x", "y", "z", "u", "v", "w")
     y_grid = y_grid[end:-1:1]
-    u_tot .= 0
-    v_tot = zeros(Float32, size(u_tot))
-    w_tot = zeros(Float32, size(u_tot))
-    for t in first_timepoint:current_timepoint-1
-        u, v, w = FileIO.load("$displacements_folder/piv_results_$(t).jld2", "u", "v", "w")
-        u_tot .+= u
-        v_tot .+= v
-        w_tot .+= w
-    end
     v_tot .*= -1
-    h, w, d = size(image)
+    
+    h, w, d = size(image_t)
     x = 1:w
     y = 1:h
     z = 1:d
@@ -55,17 +59,23 @@ function deform_image(image, displacements_folder, first_timepoint, current_time
     ut = itp_u_img(y, x, z)
     vt = itp_v_img(y, x, z)
     wt = itp_w_img(y, x, z)
-    itp_img = extrapolate(interpolate(image, BSpline(Cubic(Line(OnGrid())))), 0)
-    deformed_image = itp_img.(y .+ vt, reshape(x, 1,:,1) .+ ut, reshape(z, 1,1,:) .+ wt)
-    imshow(deformed_image)
-    return deformed_image 
-end
 
-function mask_image!(intensity_thresholds, mask, deformed_image)
-    slices = size(deformed_image, 3)
-    for i in 1:slices
-        mask[:,:,i] = @views deformed_image[:,:,i] .> intensity_thresholds[i]
+    for i in CartesianIndices(image_t)
+        if ut[i] == 0 && vt[i] == 0 && wt[i] == 0
+            deformed_img[i] += image_tm1[i]
+        else
+            xi = i[2] + round(Int, ut[i])
+            yi = i[1] + round(Int, vt[i])
+            zi = i[3] + round(Int, wt[i])
+            if 1 <= xi <= w && 1 <= yi <= h && 1 <= zi <= d
+                deformed_img[yi, xi, zi] += image_tm1[i]
+            end
+        end
     end
+    deformed_img .-= image_t
+    mask_image!(intensity_thresholds, mask, deformed_img)
+    imshow(mask)
+    return nothing 
 end
 
 function radial_averaging(mask_files, files, images_folder, first_index, end_index, bin_interval, intensity_thresholds, displacements_folder)
@@ -86,11 +96,11 @@ function radial_averaging(mask_files, files, images_folder, first_index, end_ind
     ntimepoints = end_index - first_index
     data_matrix = zeros(nbins-1, ntimepoints)
     for t in 1:ntimepoints
-        image_t = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-1])"))
-        image_tm1 = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-2])"))
+        image_t = Float32.(TiffImages.load("$images_folder/$(files[t+first_index])"))
+        image_tm1 = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-1])"))
+        deformed_img = zeros(Float32, size(image_t))
         mask = zeros(Bool, size(image_t))
-        deformed_image = deform_image(image, displacements_folder, first_index, t+first_index-1)
-        mask_image!(intensity_thresholds, mask, deformed_image)
+        deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_folder, t+first_index-1, intensity_thresholds)
         for i in 1:size(data_matrix, 1) 
             data_matrix[i, t] = mean(mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
