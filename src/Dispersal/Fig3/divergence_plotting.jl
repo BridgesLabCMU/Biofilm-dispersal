@@ -36,7 +36,7 @@ function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
     plot_xlabel = "Time (h)"
     plot_ylabel = L"Net divergence rate (h$^{-1}$)"
-    vector_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Dispersal/"
+    vector_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
     files = sort([f for f in readdir(vector_folder, join=true) if occursin("piv", f)], lt=natural)
     dx = 8
     dy = 8
