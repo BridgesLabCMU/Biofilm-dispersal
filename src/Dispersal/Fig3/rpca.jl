@@ -1,6 +1,8 @@
 using LinearAlgebra
 using SparseArrays
 using Printf
+using FileIO
+using NaturalSort
 
 function inexact_alm_rpca(D; λ=nothing, tol=1e-7, maxIter=1000)
     m, n = size(D)
@@ -23,7 +25,7 @@ function inexact_alm_rpca(D; λ=nothing, tol=1e-7, maxIter=1000)
     mu = 1.25 / norm_two  # Can be tuned
     mu_bar = mu * 1e7
     rho = 1.5  # Can be tuned
-    d_norm = norm(D, Frobenius)
+    d_norm = norm(D, 2)
 
     iter_num = 0
     converged = false
@@ -49,13 +51,14 @@ function inexact_alm_rpca(D; λ=nothing, tol=1e-7, maxIter=1000)
         Y .+= mu .* Z
         mu = min(mu * rho, mu_bar)
 
-        stopCriterion = norm(Z, Frobenius) / d_norm
+        stopCriterion = norm(Z, 2) / d_norm
         if stopCriterion < tol
             converged = true
         end
 
         if iter_num % 10 == 0
-            @printf("Iteration: %d, Rank(A): %d, ||E||_0: %d, stopCriterion: %.5f\n", iter_num, rank(A_hat), count(!iszero, E_hat), stopCriterion)
+            @printf("Iteration: %d, Rank(A): %d, ||E||_0: %d, stopCriterion: %.5f\n", 
+                    iter_num, rank(A_hat), count(!iszero, E_hat), stopCriterion)
         end
 
         if !converged && iter_num >= maxIter
@@ -67,4 +70,23 @@ function inexact_alm_rpca(D; λ=nothing, tol=1e-7, maxIter=1000)
     return A_hat, E_hat, iter_num
 end
 
-
+function main()
+    data_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
+    files = sort([f for f in readdir(data_folder, join=true) if occursin("piv", f)], lt=natural) 
+    nfiles = length(files)
+    u_dummy = load(files[1], "u")
+    h, width, d = size(u_dummy)
+    data_matrix = Array{Float64}(undef, h*width*d*3, nfiles)
+    for i in 1:nfiles
+        u, v, w = load(files[i], "u", "v", "w")
+        data_matrix[:,i] = vcat(u[:], v[:], w[:] .* 4) 
+    end
+    λ = 1 
+    tol = 1e-7
+    maxIter = 1000
+    L, S, iter_num = inexact_alm_rpca(data_matrix, λ=λ, tol=tol, maxIter=maxIter)
+    L = reshape(L, (h, width, d, 3, nfiles))
+    @views Lu, Lv, Lw = L[:,:,:,1,:], L[:,:,:,2,:], L[:,:,:,3,:]
+    save(data_folder*"rpca_result.jld2", Dict("u" => Lu, "v" => Lv, "w" => Lw))
+end
+main()

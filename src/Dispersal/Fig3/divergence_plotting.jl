@@ -37,17 +37,17 @@ function main()
     plot_xlabel = "Time (h)"
     plot_ylabel = L"Net divergence rate (h$^{-1}$)"
     vector_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
-    files = sort([f for f in readdir(vector_folder, join=true) if occursin("piv", f)], lt=natural)
     dx = 8
     dy = 8
-    dz = 2
-    divergences = Array{Float64, 1}(undef, length(files))
-    for i in 1:length(files) 
-        u, v, w = load(files[i], "u", "v", "w")
-        u = permutedims(u, [2,1,3])
-        v = permutedims(v, [2,1,3])
-        w = permutedims(w, [2,1,3])
-        net_divergence = calculate_divergence(u, v, w, dx, dy, dz)
+    dz = 8
+    rpca_files = [f for f in readdir(vector_folder, join=true) if occursin("rpca", f)]
+    u, v, w = load(rpca_files[1], "u", "v", "w")
+    divergences = Array{Float64, 1}(undef, size(u)[4])
+    for i in 1:size(u)[4] 
+        @views ui = permutedims(u[:,:,:,i], [2,1,3])
+        @views vi = permutedims(v[:,:,:,i], [2,1,3])
+        @views wi = permutedims(w[:,:,:,i], [2,1,3])
+        net_divergence = calculate_divergence(ui, vi, wi, dx, dy, dz)
         divergences[i] = net_divergence
     end
     xs = 0:6:length(divergences)-1
