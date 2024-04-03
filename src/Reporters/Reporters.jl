@@ -17,13 +17,7 @@ using FFTW
 using Compat
 using FLoops
 
-function thresh(μ, t₀)
-    if μ < t₀/1.5 
-        return (t₀+0.03) + ((t₀-0.03)-(t₀+0.03))*μ
-    else
-        return (t₀+0.06) + ((t₀-0.06)-(t₀+0.06))*μ
-    end
-end
+thresh(μ, t₀) = (t₀-0.02) + ((t₀+0.06)-(t₀-0.06))*μ
 
 function phase_offset(source::AbstractArray, target::AbstractArray; kwargs...)
     plan = plan_fft(source)
@@ -173,7 +167,6 @@ function compute_mask!(stack, raw_stack, masks,
                         sig, fixed_thresh, ntimepoints, constitutive)
     @inbounds for t in 1:ntimepoints
         @views img = stack[:,:,t]
-        imshow(img .> fixed_thresh)
         plank_mask = img .< fixed_thresh 
         @views plank = plank_mask .* raw_stack[:,:,constitutive,t] 
         flattened_plank = vec(plank)
@@ -186,6 +179,7 @@ function compute_mask!(stack, raw_stack, masks,
 end
 
 function output_images!(stack, masks, overlay, output_dir)
+    imshow(masks)
     flat_stack = vec(stack)
     img_min = quantile(flat_stack, 0.0035)
     img_max = quantile(flat_stack, 0.9965)
@@ -204,9 +198,9 @@ function main()
     files = sort([f for f in readdir(dir, join=true) if occursin(".ome.tif", f) && occursin("check", f)], lt=natural)
     shift_thresh = 100 
     sig = 2 
-    constitutive = 1 # index for constitutive channel
-    reporter = 2 # index for reporter channel
-    blockDiameter = 501
+    constitutive = 2 # index for constitutive channel
+    reporter = 1 # index for reporter channel
+    blockDiameter = 301
     for file in files
         if isdir("$dir/results_images_"*basename(file)[1:end-8])
             rm("$dir/results_images_"*basename(file)[1:end-8]; recursive = true)
@@ -247,7 +241,6 @@ function main()
         end
         data_matrix .= ifelse.(isnan.(data_matrix), 0, data_matrix)
         FileIO.save(output_file, Dict("data" => data_matrix))
-        @show data_matrix[10,10]
     end
 end
 main()
