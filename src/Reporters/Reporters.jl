@@ -222,7 +222,7 @@ function main()
         fpMax = maximum(normalized_stack) 
         fpMin = minimum(normalized_stack) 
         fpMean = (fpMax - fpMin) / 2.0 + fpMin
-        fixed_thresh = fpMean + 0.02
+        fixed_thresh = fpMean + 0.0175
         images, output_stack = stack_preprocess(images, normalized_stack,
                                                 registered_stack, 
                                                 shift_thresh, fpMean, ntimepoints, 
