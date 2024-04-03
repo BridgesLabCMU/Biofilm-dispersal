@@ -232,7 +232,7 @@ function main()
                       fixed_thresh, ntimepoints, constitutive)
         output_stack = Gray{N0f8}.(output_stack)
         overlay = zeros(RGB{N0f8}, size(output_stack)...)
-        output_images!(output_stack, masks, overlay, dir)
+        output_images!(output_stack, masks, overlay, output_img_dir)
         let images = images
             @floop for t in 1:ntimepoints
                 @inbounds signal = @views mean((images[:,:,reporter,t] ./ images[:,:,constitutive,t]) .* masks[:,:,t])
