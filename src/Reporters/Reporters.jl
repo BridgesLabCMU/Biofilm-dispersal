@@ -138,12 +138,12 @@ function normalize_local_contrast(img, img_copy, blockDiameter, fpMean)
 end
 
 function stack_preprocess(img_stack, normalized_stack, registered_stack,
-                        shift_thresh, fpMean, nframes, mxshift, sig, constitutive)       
+                        shift_thresh, fpMean, nframes, mxshift, sig, constitutive, blockDiameter)       
     shifts = (0.0, 0.0) 
     @inbounds for t in 1:nframes
-        img_normalized = img_stack[:,:,constitutive,t]
-        img_normalized .-= mean(img_normalized)
-        img_normalized .+= fpMean
+        img = img_stack[:,:,constitutive,t]
+        img_copy = copy(img)
+        img_normalized = normalize_local_contrast(img, img_copy, blockDiameter, fpMean)
         normalized_stack[:,:,t] = imfilter(img_normalized, Kernel.gaussian(sig))
         if t == 1
             registered_stack[:,:,t] = normalized_stack[:,:,t]
@@ -206,7 +206,7 @@ function main()
     sig = 2 
     constitutive = 1 # index for constitutive channel
     reporter = 2 # index for reporter channel
-    blockDiameter = 500
+    blockDiameter = 501
     for file in files
         if isdir("$dir/results_images_"*basename(file)[1:end-8])
             rm("$dir/results_images_"*basename(file)[1:end-8]; recursive = true)
@@ -232,7 +232,7 @@ function main()
         images, output_stack = stack_preprocess(images, normalized_stack,
                                                 registered_stack, 
                                                 shift_thresh, fpMean, ntimepoints, 
-                                                shift_thresh, sig, constitutive)
+                                                shift_thresh, sig, constitutive, blockDiameter)
         @views masks = zeros(Bool, size(images[:,:,constitutive,:]))
         compute_mask!(output_stack, images, masks, sig, 
                       fixed_thresh, ntimepoints, constitutive)
