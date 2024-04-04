@@ -1,14 +1,10 @@
 using Images: imfilter, mapwindow, adjust_histogram!, LinearStretching, Gray, N0f16, N0f8,
               Kernel, warp, axes, KernelFactors, RGB 
-using ImageMorphology: label_components, component_lengths
 using ImageView
 using StatsBase: mean, median, quantile
 using TiffImages
 using FileIO
 using NaturalSort: sort, natural
-using DataFrames: DataFrame
-using CSV: write
-using JSON: parsefile
 using IntegralArrays: IntegralArray
 using CoordinateTransformations: Translation
 using IntervalSets: width, leftendpoint, rightendpoint, Interval, ±
@@ -16,8 +12,11 @@ using AbstractFFTs
 using FFTW
 using Compat
 using FLoops
+using PythonCall
 
-thresh(μ, t₀) = (t₀-0.02) + ((t₀+0.06)-(t₀-0.06))*μ
+morph = pyimport("skimage.morphology")
+
+thresh(μ, t₀) = ((t₀+0.06)-(t₀-0.06))*μ
 
 function phase_offset(source::AbstractArray, target::AbstractArray; kwargs...)
     plan = plan_fft(source)
@@ -165,82 +164,93 @@ end
 
 function compute_mask!(stack, raw_stack, masks, 
                         sig, fixed_thresh, ntimepoints, constitutive)
+    prev_threshold = 0
     @inbounds for t in 1:ntimepoints
-        @views img = stack[:,:,t]
-        plank_mask = img .< fixed_thresh 
-        @views plank = plank_mask .* raw_stack[:,:,constitutive,t] 
-        flattened_plank = vec(plank)
-        plank_pixels = filter(x -> x != 0, flattened_plank)
-        plank_avg = mean(plank_pixels)
-        threshold = thresh(plank_avg, fixed_thresh)
-        mask = img .>= threshold
+        @views img = mapwindow(median, stack[:,:,t], (3,3))
+        threshold = fixed_thresh + thresh(mean(img), fixed_thresh)
+        if prev_threshold > threshold
+            threshold = prev_threshold
+        end
+        prev_threshold = threshold
+        mask = img .> threshold 
+        mask = pyconvert(Array, morph.isotropic_opening(mask, radius=5))
 		masks[:,:,t] = mask
 	end
 end
 
-function output_images!(stack, masks, overlay, output_dir)
+function output_images!(stack, masks, overlay, output_dir, replicate)
     imshow(masks)
     flat_stack = vec(stack)
     img_min = quantile(flat_stack, 0.0035)
     img_max = quantile(flat_stack, 0.9965)
     adjust_histogram!(stack, LinearStretching(src_minval=img_min, src_maxval=img_max, 
                                               dst_minval=0, dst_maxval=1))
-    TiffImages.save("$output_dir/constitutive.tif", stack)
+    TiffImages.save("$output_dir/constitutive_"*replicate*".tif", stack)
     @inbounds for i in CartesianIndices(stack)
         gray_val = RGB{N0f8}(stack[i], stack[i], stack[i])
         overlay[i] = masks[i] ? RGB{N0f8}(1, 0, 0) : gray_val
     end
-    TiffImages.save("$output_dir/constitutive_mask.tif", overlay)
+    TiffImages.save("$output_dir/constitutive_mask_"*replicate*".tif", overlay)
 end
 
 function main()
-    dir = "/mnt/f/Sandhya_Imaging/Time_Lapses/Reporters/" 
-    files = sort([f for f in readdir(dir, join=true) if occursin(".ome.tif", f) && occursin("check", f)], lt=natural)
+    dir = "/mnt/f/Sandhya_Imaging/Time_Lapses/Reporters/Ptac/" # Folder containing the images for strain X 
+    files = sort([f for f in readdir(dir, join=true) if occursin(".ome.tif", f)], lt=natural)
     shift_thresh = 100 
     sig = 2 
     constitutive = 2 # index for constitutive channel
     reporter = 1 # index for reporter channel
     blockDiameter = 301
+    ntimepoints = 17
+    if isdir("$dir/results_images")
+        rm("$dir/results_images"; recursive = true)
+    end
+    if isdir("$dir/results_data")
+        rm("$dir/results_data"; recursive = true)
+    end
+    output_img_dir = "$dir/results_images"
+    output_data_dir = "$dir/results_data"
+    mkdir(output_img_dir)
+    mkdir(output_data_dir)
+    output_file = "$output_data_dir/data.jld2"
+    data_matrix = Array{Float64, 2}(undef, ntimepoints, length(files))
     for file in files
-        if isdir("$dir/results_images_"*basename(file)[1:end-8])
-            rm("$dir/results_images_"*basename(file)[1:end-8]; recursive = true)
+        height, width, channels, nslices, nframes = size(FileIO.load(file))
+        if nframes != ntimepoints
+            error("Number of timepoints in the image stack ($nframes) does not match the expected number of timepoints ($ntimepoints)")
         end
-        if isdir("$dir/results_data_"*basename(file)[1:end-8])
-            rm("$dir/results_data_"*basename(file)[1:end-8]; recursive = true)
-        end
-        output_img_dir = "$dir/results_images_"*basename(file)[1:end-8]
-        output_data_dir = "$dir/results_data_"*basename(file)[1:end-8]
-        mkdir(output_img_dir)
-        mkdir(output_data_dir)
-        output_file = "$output_data_dir/data.jld2"
-        height, width, channels, nslices, ntimepoints = size(FileIO.load(file))
         @views images = Float64.(sum(reshape(TiffImages.load(file), 
-                                             (height, width, nslices, channels, ntimepoints)), dims=3)[:,:,1,:,:])
-        data_matrix = Array{Float64, 1}(undef, ntimepoints)
+                                             (height, width, nslices, channels, nframes)), dims=3)[:,:,1,:,:])
         normalized_stack = images[:,:,constitutive,:]
         registered_stack = copy(normalized_stack)
         fpMax = maximum(normalized_stack) 
         fpMin = minimum(normalized_stack) 
         fpMean = (fpMax - fpMin) / 2.0 + fpMin
-        fixed_thresh = fpMean + 0.0175
         images, output_stack = stack_preprocess(images, normalized_stack,
                                                 registered_stack, 
-                                                shift_thresh, fpMean, ntimepoints, 
+                                                shift_thresh, fpMean, nframes, 
                                                 shift_thresh, sig, constitutive, blockDiameter)
-        @views masks = zeros(Bool, size(images[:,:,constitutive,:]))
+        @views first_slice = output_stack[:,:,1]
+        output_stack = output_stack .- first_slice[:,:,:]
+        output_stack[output_stack .< 0] .= 0
+        @views masks = zeros(Bool, size(output_stack))
+        fpMax = maximum(output_stack) 
+        fpMin = minimum(output_stack) 
+        fpMean = (fpMax - fpMin) / 2.0 + fpMin
+        fixed_thresh = fpMean - 0.11
         compute_mask!(output_stack, images, masks, sig, 
-                      fixed_thresh, ntimepoints, constitutive)
+                      fixed_thresh, nframes, constitutive)
         output_stack = Gray{N0f8}.(output_stack)
         overlay = zeros(RGB{N0f8}, size(output_stack)...)
         output_images!(output_stack, masks, overlay, output_img_dir)
         let images = images
-            @floop for t in 1:ntimepoints
+            @floop for t in 1:nframes
                 @inbounds signal = @views mean((images[:,:,reporter,t] ./ images[:,:,constitutive,t]) .* masks[:,:,t])
                 @inbounds data_matrix[t] = signal 
             end
         end
-        data_matrix .= ifelse.(isnan.(data_matrix), 0, data_matrix)
-        FileIO.save(output_file, Dict("data" => data_matrix))
     end
+    data_matrix .= ifelse.(isnan.(data_matrix), 0, data_matrix)
+    FileIO.save(output_file, Dict("data" => data_matrix))
 end
 main()
