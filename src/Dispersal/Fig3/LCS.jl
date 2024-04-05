@@ -1,25 +1,3 @@
-"""
-Procedure:
-1. Load in vector fields as 4D arrays (x,y,z,t) 
-2. Interpolate them to get continuous vector fields in space and time
-3. Define a function that for any configuration of particles, returns the velocity at that point
-4. Define constants and initial conditions
-5. Starting with the initial configuration (x, y, z meshgrid), step it forward in time using RK4
-6. Retrieve the x, y, z coords after the timestep
-7. Calculate the spatial gradient of the x, y, z coords
-8. For each x, y, z position, calculate its deformation tensor
-9. Calculate the maximum singular value and the FTLE at that point and add it to the forward LCS
-
-
-Currently the code is completely vectorized aside from the calculation of the FTLE at each point.
-Is it possible to get rid of all vectorization?
-
-
-
-
-
-"""
-
 using FileIO
 using Interpolations
 using LinearAlgebra
@@ -79,85 +57,162 @@ function main()
     x0 = 1:dx:img_size[2]
     y0 = 1:dx:img_size[1]
     z0 = 1:dx:img_size[3]
-    xT = zeros(Float64, length(x0))
-    yT = zeros(Float64, length(y0))
-    zT = zeros(Float64, length(z0))
+    xlen = length(x0)
+    ylen = length(y0)
+    zlen = length(z0)
+    xT = zeros(Float64, xlen, ylen, zlen)
+    yT = zeros(Float64, xlen, ylen, zlen)
+    zT = zeros(Float64, xlen, ylen, zlen)
     dt = 0.1  
     dt2 = Delta
     Tin = 40
     T = Nsim*dt2
 
-    solfor = zeros(Float64, length(x0), length(y0), length(z0), Nsim) 
-    solbac = zeros(Float64, length(x0), length(y0), length(z0), Nsim)
+    solfor = zeros(Float64, xlen, ylen, zlen, Nsim) 
+    solbac = zeros(Float64, xlen, ylen, zlen, Nsim)
 
     for m in 1:dt2:T
-        for i in 1:length(x0)
-            for j in 1:length(y0) 
-                for k in 1:length(z0)
+        for i in 1:xlen
+            for j in 1:ylen 
+                for k in 1:zlen
                     for τ in m:dt:Tin+m
-                        sol = rk4singlestep(doublegyreVEC(t, y), dt, 
+                        sol = rk4singlestep((t,y) -> doublegyreVEC(t, y), dt, 
                                             τ, [x0[i],y0[j],z0[k]])
                     end
-                    xT[i] = sol[1]
-                    yT[j] = sol[2]
-                    zT[k] = sol[3]
+                    xT[i,j,k] = sol[1]
+                    yT[i,j,k] = sol[2]
+                    zT[i,j,k] = sol[3]
                 end
             end
         end
 
         D = zeros(Float64, 3, 3)
-        for i in 1:length(x0)
-            for j in 1:length(y0)
-                for k in 1:length(z0)
-                    # Calculate gradients here
-                    D[1,1] = dxTdx0[j,i,k]
-                    D[1,2] = dxTdy0[j,i,k]
-                    D[1,3] = dxTdz0[j,i,k]
-                    D[2,1] = dyTdx0[j,i,k]
-                    D[2,2] = dyTdy0[j,i,k]
-                    D[2,3] = dyTdz0[j,i,k]
-                    D[3,1] = dzTdx0[j,i,k]
-                    D[3,2] = dzTdy0[j,i,k]
-                    D[3,3] = dzTdz0[j,i,k]
-                    solfor[i,j,k,m] = abs(1/Tin) * max(eigvals(D'*D))
+        for i in 1:xlen
+            for j in 1:ylen
+                for k in 1:zlen
+					dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
+							 i == xlen ? (xT[i,j,k] - xT[i-1,j,k])/dx :
+							 (xT[i+1,j,k] - xT[i-1,j,k])/(2*dx)
+
+					dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
+							 j == ylen ? (xT[i,j,k] - xT[i,j-1,k])/dx :
+							 (xT[i,j+1,k] - xT[i,j-1,k])/(2*dx)
+
+					dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
+							 k == zlen ? (xT[i,j,k] - xT[i,j,k-1])/dx :
+							 (xT[i,j,k+1] - xT[i,j,k-1])/(2*dx)
+
+					dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
+							 i == xlen ? (yT[i,j,k] - yT[i-1,j,k])/dx :
+							 (yT[i+1,j,k] - yT[i-1,j,k])/(2*dx)
+
+					dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
+							 j == ylen ? (yT[i,j,k] - yT[i,j-1,k])/dx :
+							 (yT[i,j+1,k] - yT[i,j-1,k])/(2*dx)
+
+					dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
+							 k == zlen ? (yT[i,j,k] - yT[i,j,k-1])/dx :
+							 (yT[i,j,k+1] - yT[i,j,k-1])/(2*dx)
+
+					dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
+							 i == xlen ? (zT[i,j,k] - zT[i-1,j,k])/dx :
+							 (zT[i+1,j,k] - zT[i-1,j,k])/(2*dx)
+
+					dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
+							 j == ylen ? (zT[i,j,k] - zT[i,j-1,k])/dx :
+							 (zT[i,j+1,k] - zT[i,j-1,k])/(2*dx)
+
+					dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
+							 k == zlen ? (zT[i,j,k] - zT[i,j,k-1])/dx :
+							 (zT[i,j,k+1] - zT[i,j,k-1])/(2*dx)
+                    D[1,1] = dxTdx0
+                    D[1,2] = dxTdy0
+                    D[1,3] = dxTdz0
+                    D[2,1] = dyTdx0
+                    D[2,2] = dyTdy0
+                    D[2,3] = dyTdz0
+                    D[3,1] = dzTdx0
+                    D[3,2] = dzTdy0
+                    D[3,3] = dzTdz0
+                    solbac[i,j,k,div(m,dt2)] = abs(1/Tin) * maximum(eigvals(D'*D))
                 end
             end
         end
-        solfor[:,:,:,m] = (solfor[:,:,:,m] .- minimum(solfor[:,:,:,m])) ./ (maximum(solfor[:,:,:,m]) - minimum(solfor[:,:,:,m]))
+        @views solformin = minimum(solfor[:,:,:,div(m,dt2)])
+        @views solformax = maximum(solfor[:,:,:,div(m,dt2)])
+        solfor[:,:,:,div(m,dt2)] .-= solformin 
+        solfor[:,:,:,div(m,dt2)] ./= solformax - solformin 
 
-        for i in 1:length(x0)
-            for j in 1:length(y0) 
-                for k in 1:length(z0)
+        for i in 1:xlen
+            for j in 1:ylen
+                for k in 1:zlen
                     for τ in m:-dt:-Tin+m
-                        sol = rk4singlestep(doublegyreVEC(t, y), -dt, 
+                        sol = rk4singlestep((t,y) -> doublegyreVEC(t, y), -dt, 
                                             τ, [x0[i],y0[j],z0[k]])
                     end
-                    xT[i] = sol[1]
-                    yT[j] = sol[2]
-                    zT[k] = sol[3]
+                    xT[i,j,k] = sol[1]
+                    yT[i,j,k] = sol[2]
+                    zT[i,j,k] = sol[3]
                 end
             end
         end
 
         D = zeros(Float64, 3, 3)
-        for i in 1:length(x0)
-            for j in 1:length(y0)
-                for k in 1:length(z0)
-                    # Calculate gradients here
-                    D[1,1] = dxTdx0[j,i,k]
-                    D[1,2] = dxTdy0[j,i,k]
-                    D[1,3] = dxTdz0[j,i,k]
-                    D[2,1] = dyTdx0[j,i,k]
-                    D[2,2] = dyTdy0[j,i,k]
-                    D[2,3] = dyTdz0[j,i,k]
-                    D[3,1] = dzTdx0[j,i,k]
-                    D[3,2] = dzTdy0[j,i,k]
-                    D[3,3] = dzTdz0[j,i,k]
-                    solbac[i,j,k,m] = abs(1/Tin) * max(eigvals(D'*D))
+        for i in 1:xlen
+            for j in 1:ylen
+                for k in 1:zlen
+					dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
+							 i == xlen ? (xT[i,j,k] - xT[i-1,j,k])/dx :
+							 (xT[i+1,j,k] - xT[i-1,j,k])/(2*dx)
+
+					dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
+							 j == ylen ? (xT[i,j,k] - xT[i,j-1,k])/dx :
+							 (xT[i,j+1,k] - xT[i,j-1,k])/(2*dx)
+
+					dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
+							 k == zlen ? (xT[i,j,k] - xT[i,j,k-1])/dx :
+							 (xT[i,j,k+1] - xT[i,j,k-1])/(2*dx)
+
+					dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
+							 i == xlen ? (yT[i,j,k] - yT[i-1,j,k])/dx :
+							 (yT[i+1,j,k] - yT[i-1,j,k])/(2*dx)
+
+					dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
+							 j == ylen ? (yT[i,j,k] - yT[i,j-1,k])/dx :
+							 (yT[i,j+1,k] - yT[i,j-1,k])/(2*dx)
+
+					dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
+							 k == zlen ? (yT[i,j,k] - yT[i,j,k-1])/dx :
+							 (yT[i,j,k+1] - yT[i,j,k-1])/(2*dx)
+
+					dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
+							 i == xlen ? (zT[i,j,k] - zT[i-1,j,k])/dx :
+							 (zT[i+1,j,k] - zT[i-1,j,k])/(2*dx)
+
+					dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
+							 j == ylen ? (zT[i,j,k] - zT[i,j-1,k])/dx :
+							 (zT[i,j+1,k] - zT[i,j-1,k])/(2*dx)
+
+					dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
+							 k == zlen ? (zT[i,j,k] - zT[i,j,k-1])/dx :
+							 (zT[i,j,k+1] - zT[i,j,k-1])/(2*dx)
+                    D[1,1] = dxTdx0
+                    D[1,2] = dxTdy0
+                    D[1,3] = dxTdz0
+                    D[2,1] = dyTdx0
+                    D[2,2] = dyTdy0
+                    D[2,3] = dyTdz0
+                    D[3,1] = dzTdx0
+                    D[3,2] = dzTdy0
+                    D[3,3] = dzTdz0
+                    solbac[i,j,k,div(m,dt2)] = abs(1/Tin) * maximum(eigvals(D'*D))
                 end
             end
         end
-        solbac[:,:,:,m] = (solbac[:,:,:,m] .- minimum(solbac[:,:,:,m])) ./ (maximum(solbac[:,:,:,m]) - minimum(solbac[:,:,:,m]))
+        @views solbacmin = minimum(solbac[:,:,:,div(m,dt2)])
+        @views solbacmax = maximum(solbac[:,:,:,div(m,dt2)])
+        solbac[:,:,:,div(m,dt2)] .-= solbacmin 
+        solbac[:,:,:,div(m,dt2)] ./= solbacmax - solbacmin 
     end
-    save(folder*"FTLE.jld2", Dict("solfor" => solfor, "solbac" => solbac))
+    save(folder*"FTLE.jld2", Dict("forward_LCS" => solfor, "backward_LCS" => solbac))
 end
