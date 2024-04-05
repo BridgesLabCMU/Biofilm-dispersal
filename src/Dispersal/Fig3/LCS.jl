@@ -51,8 +51,6 @@ function main()
     end
 
     # Constants
-    Delta = 1
-    Nsim = ntimepoints  
     dx = 1
     x0 = 1:dx:img_size[2]
     y0 = 1:dx:img_size[1]
@@ -64,14 +62,13 @@ function main()
     yT = zeros(Float64, xlen, ylen, zlen)
     zT = zeros(Float64, xlen, ylen, zlen)
     dt = 0.1  
-    dt2 = Delta
     Tin = 40
-    T = Nsim*dt2
+    T = ntimepoints 
 
-    solfor = zeros(Float64, xlen, ylen, zlen, Nsim) 
-    solbac = zeros(Float64, xlen, ylen, zlen, Nsim)
+    solfor = zeros(Float64, xlen, ylen, zlen, T) 
+    solbac = zeros(Float64, xlen, ylen, zlen, T)
 
-    for m in 1:dt2:T
+    for m in 1:T
         for i in 1:xlen
             for j in 1:ylen 
                 for k in 1:zlen
@@ -134,14 +131,14 @@ function main()
                     D[3,1] = dzTdx0
                     D[3,2] = dzTdy0
                     D[3,3] = dzTdz0
-                    solbac[i,j,k,div(m,dt2)] = abs(1/Tin) * maximum(eigvals(D'*D))
+                    solbac[i,j,k,m] = abs(1/Tin) * maximum(eigvals(D'*D))
                 end
             end
         end
-        @views solformin = minimum(solfor[:,:,:,div(m,dt2)])
-        @views solformax = maximum(solfor[:,:,:,div(m,dt2)])
-        solfor[:,:,:,div(m,dt2)] .-= solformin 
-        solfor[:,:,:,div(m,dt2)] ./= solformax - solformin 
+        @views solformin = minimum(solfor[:,:,:,m])
+        @views solformax = maximum(solfor[:,:,:,m])
+        solfor[:,:,:,m] .-= solformin 
+        solfor[:,:,:,m] ./= solformax - solformin 
 
         for i in 1:xlen
             for j in 1:ylen
@@ -205,14 +202,14 @@ function main()
                     D[3,1] = dzTdx0
                     D[3,2] = dzTdy0
                     D[3,3] = dzTdz0
-                    solbac[i,j,k,div(m,dt2)] = abs(1/Tin) * maximum(eigvals(D'*D))
+                    solbac[i,j,k,m] = abs(1/Tin) * maximum(eigvals(D'*D))
                 end
             end
         end
-        @views solbacmin = minimum(solbac[:,:,:,div(m,dt2)])
-        @views solbacmax = maximum(solbac[:,:,:,div(m,dt2)])
-        solbac[:,:,:,div(m,dt2)] .-= solbacmin 
-        solbac[:,:,:,div(m,dt2)] ./= solbacmax - solbacmin 
+        @views solbacmin = minimum(solbac[:,:,:,m])
+        @views solbacmax = maximum(solbac[:,:,:,m])
+        solbac[:,:,:,m] .-= solbacmin 
+        solbac[:,:,:,m] ./= solbacmax - solbacmin 
     end
     save(folder*"FTLE.jld2", Dict("forward_LCS" => solfor, "backward_LCS" => solbac))
 end
