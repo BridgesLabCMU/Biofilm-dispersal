@@ -1,3 +1,25 @@
+"""
+Procedure:
+1. Load in vector fields as 4D arrays (x,y,z,t) 
+2. Interpolate them to get continuous vector fields in space and time
+3. Define a function that for any configuration of particles, returns the velocity at that point
+4. Define constants and initial conditions
+5. Starting with the initial configuration (x, y, z meshgrid), step it forward in time using RK4
+6. Retrieve the x, y, z coords after the timestep
+7. Calculate the spatial gradient of the x, y, z coords
+8. For each x, y, z position, calculate its deformation tensor
+9. Calculate the maximum singular value and the FTLE at that point and add it to the forward LCS
+
+
+Currently the code is completely vectorized aside from the calculation of the FTLE at each point.
+Is it possible to get rid of all vectorization?
+
+
+
+
+
+"""
+
 using FileIO
 using Interpolations
 using LinearAlgebra
@@ -34,6 +56,9 @@ function main()
     end
 
     w_tot .*= 4
+    z .-= 1
+    z .*= 4
+    z .+= 1
 
     u_int = extrapolate(interpolate((x, y, z, 1:ntimepoints), u_tot, Gridded(Linear())), 0)
     v_int = extrapolate(interpolate((x, y, z, 1:ntimepoints), v_tot, Gridded(Linear())), 0)
@@ -49,43 +74,42 @@ function main()
 
     # Constants
     Delta = 1
-    Nsim = 50
+    Nsim = ntimepoints  
     dx = 1
-    xvec = 1:dx:img_size[2]
-    yvec = 1:dx:img_size[1]
-    zvec = 1:dx:img_size[3]
-    zvec .-= 1
-    zvec .*= 4
-    zvec .+= 1
-    yIC = zeros(Float64, (3, length(yvec), length(xvec), length(zvec)))
+    x0 = 1:dx:img_size[2]
+    y0 = 1:dx:img_size[1]
+    z0 = 1:dx:img_size[3]
+    xT = zeros(Float64, length(x0))
+    yT = zeros(Float64, length(y0))
+    zT = zeros(Float64, length(z0))
     dt = 0.1  
     dt2 = Delta
     Tin = 40
     T = Nsim*dt2
 
-    solfor = []
-    solbac = []
+    solfor = zeros(Float64, length(x0), length(y0), length(z0), Nsim) 
+    solbac = zeros(Float64, length(x0), length(y0), length(z0), Nsim)
 
-    for m in 0:dt2:T
-        yin_for = yIC
-        for i in m:dt:Tin
-            yout_for = rk4singlestep(doublegyreVEC(t, y), dt, i, yin_for)
-            yin_for = yout_for
+    for m in 1:dt2:T
+        for i in 1:length(x0)
+            for j in 1:length(y0) 
+                for k in 1:length(z0)
+                    for τ in m:dt:Tin+m
+                        sol = rk4singlestep(doublegyreVEC(t, y), dt, 
+                                            τ, [x0[i],y0[j],z0[k]])
+                    end
+                    xT[i] = sol[1]
+                    yT[j] = sol[2]
+                    zT[k] = sol[3]
+                end
+            end
         end
 
-        xT = yin_for[1]
-        yT = yin_for[2]
-        zT = yin_for[3]
-
-        dxTdx0, dxTdy0, dxTdz0 = gradient(xT, dx, dx)
-        dyTdx0, dyTdy0, dyTdz0 = gradient(yT, dx, dx)
-        dzTdx0, dzTdy0, dzTdz0 = gradient(zT, dx, dx)
-
         D = zeros(Float64, 3, 3)
-        sigma = zeros(Float64, size(xT))
-        for i in 1:length(xvec)
-            for j in 1:length(yvec)
-                for k in 1:length(zvec)
+        for i in 1:length(x0)
+            for j in 1:length(y0)
+                for k in 1:length(z0)
+                    # Calculate gradients here
                     D[1,1] = dxTdx0[j,i,k]
                     D[1,2] = dxTdy0[j,i,k]
                     D[1,3] = dxTdz0[j,i,k]
@@ -95,33 +119,31 @@ function main()
                     D[3,1] = dzTdx0[j,i,k]
                     D[3,2] = dzTdy0[j,i,k]
                     D[3,3] = dzTdz0[j,i,k]
-                    sigma[j,i,k] = abs(1/Tin) * max(eigvals(D'*D))
+                    solfor[i,j,k,m] = abs(1/Tin) * max(eigvals(D'*D))
                 end
             end
         end
-        sigma = (sigma .- minimum(sigma)) ./ (maximum(sigma) - minimum(sigma))
-        push!(solfor, sigma)
+        solfor[:,:,:,m] = (solfor[:,:,:,m] .- minimum(solfor[:,:,:,m])) ./ (maximum(solfor[:,:,:,m]) - minimum(solfor[:,:,:,m]))
 
-        yin_bac = yIC
-
-        for i in m:-dt:-Tin+m
-            yout = rk4singlestep(doublegyreVEC(t, y), -dt, i, yin_bac)
-            yin_bac = yout
+        for i in 1:length(x0)
+            for j in 1:length(y0) 
+                for k in 1:length(z0)
+                    for τ in m:-dt:-Tin+m
+                        sol = rk4singlestep(doublegyreVEC(t, y), -dt, 
+                                            τ, [x0[i],y0[j],z0[k]])
+                    end
+                    xT[i] = sol[1]
+                    yT[j] = sol[2]
+                    zT[k] = sol[3]
+                end
+            end
         end
 
-        xT = yin_bac[1]
-        yT = yin_bac[2]
-        zT = yin_bac[3]
-
-        dxTdx0, dxTdy0, dxTdz0 = gradient(xT, dx, dx)
-        dyTdx0, dyTdy0, dyTdz0 = gradient(yT, dx, dx)
-        dzTdx0, dzTdy0, dzTdz0 = gradient(zT, dx, dx)
-
         D = zeros(Float64, 3, 3)
-        sigma = zeros(Float64, size(xT))
-        for i in 1:length(xvec)
-            for j in 1:length(yvec)
-                for k in 1:length(zvec)
+        for i in 1:length(x0)
+            for j in 1:length(y0)
+                for k in 1:length(z0)
+                    # Calculate gradients here
                     D[1,1] = dxTdx0[j,i,k]
                     D[1,2] = dxTdy0[j,i,k]
                     D[1,3] = dxTdz0[j,i,k]
@@ -131,12 +153,11 @@ function main()
                     D[3,1] = dzTdx0[j,i,k]
                     D[3,2] = dzTdy0[j,i,k]
                     D[3,3] = dzTdz0[j,i,k]
-                    sigma[j,i,k] = abs(1/Tin) * max(eigvals(D'*D))
+                    solbac[i,j,k,m] = abs(1/Tin) * max(eigvals(D'*D))
                 end
             end
         end
-        sigma = (sigma .- minimum(sigma)) ./ (maximum(sigma) - minimum(sigma))
-        push!(solbac, sigma)
+        solbac[:,:,:,m] = (solbac[:,:,:,m] .- minimum(solbac[:,:,:,m])) ./ (maximum(solbac[:,:,:,m]) - minimum(solbac[:,:,:,m]))
     end
-    save(folder*"solfor.jld2", Dict("solfor" => solfor, "solbac" => solbac))
+    save(folder*"FTLE.jld2", Dict("solfor" => solfor, "solbac" => solbac))
 end

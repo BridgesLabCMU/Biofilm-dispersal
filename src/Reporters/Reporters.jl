@@ -16,7 +16,7 @@ using PythonCall
 
 morph = pyimport("skimage.morphology")
 
-thresh(μ, t₀) = ((t₀+0.06)-(t₀-0.06))*μ
+#thresh(μ, t₀) = ((t₀+0.06)-(t₀-0.06))*μ
 
 function phase_offset(source::AbstractArray, target::AbstractArray; kwargs...)
     plan = plan_fft(source)
@@ -105,39 +105,14 @@ function crop(img_stack)
     return cropped_stack, (i1, i2, j1, j2)
 end
 
-function mean_filter!(X, length_scale)
-    iX = IntegralArray(X)
-    @inbounds for i in CartesianIndex(1,1):CartesianIndex(size(X))
-        x, y = i.I
-        x_int = x±length_scale
-        y_int = y±length_scale
-        x_int = Interval(max(leftendpoint(x_int), 1), 
-                         min(rightendpoint(x_int), size(X)[1]))
-        y_int = Interval(max(leftendpoint(y_int), 1), 
-                         min(rightendpoint(y_int), size(X)[2]))
-        X[i] = iX[x_int, y_int]/(width(x_int)*width(y_int))
-    end
-    return nothing 
-end
-
-function normalize_local_contrast(img, img_copy, blockDiameter, fpMean)
-    length_scale = Int((blockDiameter-1)/2)
-    mean_filter!(img_copy, length_scale)
-    img -= img_copy 
-    img .+= fpMean 
-    @. img[img < 0.0] = 0.0
-    @. img[img > 1.0] = 1.0
-    return img 
-end
-
 function stack_preprocess(img_stack, normalized_stack, registered_stack,
-                        shift_thresh, fpMean, nframes, mxshift, sig, constitutive, blockDiameter)       
+                        shift_thresh, fpMean, nframes, mxshift, constitutive, blockDiameter)       
     shifts = (0.0, 0.0) 
     @inbounds for t in 1:nframes
         img = img_stack[:,:,constitutive,t]
-        img_copy = copy(img)
-        img_normalized = normalize_local_contrast(img, img_copy, blockDiameter, fpMean)
-        normalized_stack[:,:,t] = imfilter(img_normalized, Kernel.gaussian(sig))
+        img_normalized = img .- mean(img)
+        img_normalized .+= fpMean
+        normalized_stack[:,:,t] = img_normalized
         if t == 1
             registered_stack[:,:,t] = normalized_stack[:,:,t]
         else
@@ -162,17 +137,15 @@ function stack_preprocess(img_stack, normalized_stack, registered_stack,
     return img_stack, processed_stack
 end
 
-function compute_mask!(stack, raw_stack, masks, 
-                        sig, fixed_thresh, ntimepoints, constitutive)
-    prev_threshold = 0
+function compute_mask!(stack, masks, fixed_thresh, ntimepoints, constitutive)
     @inbounds for t in 1:ntimepoints
-        @views img = mapwindow(median, stack[:,:,t], (3,3))
-        threshold = fixed_thresh + thresh(mean(img), fixed_thresh)
-        if prev_threshold > threshold
-            threshold = prev_threshold
-        end
-        prev_threshold = threshold
-        mask = img .> threshold 
+        @views img = mapwindow(median, stack[:,:,t], (5,5))
+        flat_img = vec(img)
+        img_min = quantile(flat_img, 0.0035)
+        img_max = quantile(flat_img, 0.9965)
+        adjust_histogram!(img, LinearStretching(src_minval=img_min, src_maxval=img_max, 
+                                                  dst_minval=0, dst_maxval=1))
+        mask = img .> fixed_thresh 
         mask = pyconvert(Array, morph.isotropic_opening(mask, radius=5))
 		masks[:,:,t] = mask
 	end
@@ -214,7 +187,7 @@ function main()
     mkdir(output_data_dir)
     output_file = "$output_data_dir/data.jld2"
     data_matrix = Array{Float64, 2}(undef, ntimepoints, length(files))
-    for file in files
+    for (j, file) in enumerate(files)
         height, width, channels, nslices, nframes = size(FileIO.load(file))
         if nframes != ntimepoints
             error("Number of timepoints in the image stack ($nframes) does not match the expected number of timepoints ($ntimepoints)")
@@ -229,7 +202,7 @@ function main()
         images, output_stack = stack_preprocess(images, normalized_stack,
                                                 registered_stack, 
                                                 shift_thresh, fpMean, nframes, 
-                                                shift_thresh, sig, constitutive, blockDiameter)
+                                                shift_thresh, constitutive, blockDiameter)
         @views first_slice = output_stack[:,:,1]
         output_stack = output_stack .- first_slice[:,:,:]
         output_stack[output_stack .< 0] .= 0
@@ -237,18 +210,22 @@ function main()
         fpMax = maximum(output_stack) 
         fpMin = minimum(output_stack) 
         fpMean = (fpMax - fpMin) / 2.0 + fpMin
-        fixed_thresh = fpMean - 0.11
-        compute_mask!(output_stack, images, masks, sig, 
+        fixed_thresh = fpMean + 0.01
+        @show fixed_thresh
+        compute_mask!(output_stack, masks, 
                       fixed_thresh, nframes, constitutive)
-        output_stack = Gray{N0f8}.(output_stack)
-        overlay = zeros(RGB{N0f8}, size(output_stack)...)
-        output_images!(output_stack, masks, overlay, output_img_dir)
-        let images = images
+        @views first_slice = images[:,:,reporter,1]
+        reporter_stack = images[:,:,reporter,:] .- first_slice[:,:,:]
+        reporter_stack[reporter_stack .< 0] .= 0
+        let output_stack = output_stack 
             @floop for t in 1:nframes
-                @inbounds signal = @views mean((images[:,:,reporter,t] ./ images[:,:,constitutive,t]) .* masks[:,:,t])
-                @inbounds data_matrix[t] = signal 
+                @inbounds signal = @views mean((reporter_stack[:,:,t] ./ output_stack[:,:,t]) .* masks[:,:,t])
+                @inbounds data_matrix[t, j] = signal 
             end
         end
+        output_stack = Gray{N0f8}.(output_stack)
+        overlay = zeros(RGB{N0f8}, size(output_stack)...)
+        output_images!(output_stack, masks, overlay, output_img_dir, string(j))
     end
     data_matrix .= ifelse.(isnan.(data_matrix), 0, data_matrix)
     FileIO.save(output_file, Dict("data" => data_matrix))
