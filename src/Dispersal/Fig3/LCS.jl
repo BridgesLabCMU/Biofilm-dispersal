@@ -16,9 +16,9 @@ function main()
     # Load in the data
     folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/" 
     images_folder = dirname(dirname(folder))
-    images = sort([f for f in readdir(images_folder, join=true) if occursin("isotropic.tif", f) && occursin("noplank", f)], 
+    images = sort([f for f in readdir(images_folder, join=true) if occursin("isotropic.tif", f) && occursin("no_plank", f)], 
                   lt=natural)
-    img_size = size(load(images[1]); lazyio=true)
+    img_size = size(TiffImages.load(images[1]; lazyio=true))
     files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
     ntimepoints = length(files)
     x, y, z, u_dummy = load(files[1], "x", "y", "z", "u")
@@ -28,19 +28,23 @@ function main()
     w_tot = zeros(width, height, nslices, ntimepoints)
     for i in 1:length(files)
         u, v, w = load(files[i], "u", "v", "w")
-        u_tot[:,:,:,i] = permutedims(u, (2,1,3))
-        v_tot[:,:,:,i] = permutedims(v, (2,1,3))
-        w_tot[:,:,:,i] = permutedims(w, (2,1,3))
+        u_tot[:,:,:,i] = permutedims(u[end:-1:1,:,:], (2,1,3))
+        v_tot[:,:,:,i] = permutedims(v[end:-1:1,:,:], (2,1,3))
+        w_tot[:,:,:,i] = permutedims(w[end:-1:1,:,:], (2,1,3))
     end
 
     w_tot .*= 4
-    z .-= 1
-    z .*= 4
-    z .+= 1
+    z = z .- 1
+    z = z .* 4
+    z = z .+ 1
+    y = y[end:-1:1]
 
-    u_int = extrapolate(interpolate((x, y, z, 1:ntimepoints), u_tot, Gridded(Linear())), 0)
-    v_int = extrapolate(interpolate((x, y, z, 1:ntimepoints), v_tot, Gridded(Linear())), 0)
-    w_int = extrapolate(interpolate((x, y, z, 1:ntimepoints), w_tot, Gridded(Linear())), 0)
+    u_int = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
+    v_int = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
+    w_int = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
 
     function doublegyreVEC(t, yin)
         x, y, z = yin
