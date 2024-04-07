@@ -6,10 +6,10 @@ using TiffImages
 
 function rk4singlestep(f, dt, t, y)
     k1 = f(t, y)
-    k2 = f(t + dt/2, y + dt/2*k1)
-    k3 = f(t + dt/2, y + dt/2*k2)
-    k4 = f(t + dt, y + dt*k3)
-    return y + dt/6*(k1 + 2*k2 + 2*k3 + k4)
+    k2 = f(t + dt/2, y + k1.*dt/2)
+    k3 = f(t + dt/2, y + k2.*dt/2)
+    k4 = f(t + dt, y + k3.*dt)
+    return y .+ dt/6 .* (k1 + k2.*2 + k3.*2 + k4)
 end
 
 function main()
@@ -73,6 +73,7 @@ function main()
     solbac = zeros(Float64, xlen, ylen, zlen, T)
 
     for m in 1:T
+        @show m
         for i in 1:xlen
             for j in 1:ylen 
                 for k in 1:zlen
@@ -217,3 +218,4 @@ function main()
     end
     save(folder*"FTLE.jld2", Dict("forward_LCS" => solfor, "backward_LCS" => solbac))
 end
+main()

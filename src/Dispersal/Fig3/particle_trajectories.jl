@@ -3,14 +3,13 @@ using Interpolations
 using LinearAlgebra
 using NaturalSort
 using TiffImages
-using ProgressMeter
 
 function rk4singlestep(f, dt, t, y)
     k1 = f(t, y)
-    k2 = f(t + dt/2, y + dt/2*k1)
-    k3 = f(t + dt/2, y + dt/2*k2)
-    k4 = f(t + dt, y + dt*k3)
-    return y + dt/6*(k1 + 2*k2 + 2*k3 + k4)
+    k2 = f(t + dt/2, y + k1.*dt/2)
+    k3 = f(t + dt/2, y + k2.*dt/2)
+    k4 = f(t + dt, y + k3.*dt)
+    return y .+ dt/6 .* (k1 + k2.*2 + k3.*2 + k4)
 end
 
 function main()
@@ -41,11 +40,11 @@ function main()
     y = y[end:-1:1]
     
     u_int = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
     v_int = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
     w_int = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), 0)
+                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
 
     function doublegyreVEC(t, yin)
         x, y, z = yin
@@ -65,9 +64,6 @@ function main()
     xlen = length(x0)
     ylen = length(y0)
     zlen = length(z0)
-    xT = zeros(Float64, xlen, ylen, zlen) 
-    yT = zeros(Float64, xlen, ylen, zlen) 
-    zT = zeros(Float64, xlen, ylen, zlen) 
     dt = 0.1  
     dt2 = Delta
     Tin = 40
@@ -78,27 +74,19 @@ function main()
         for j in 1:ylen
             for k in 1:zlen
                 sol_t[1:3, i,j,k,1] = [x0[i], y0[j], z0[k]]
-                xT[i,j,k] = x0[i]
-                yT[i,j,k] = y0[j]
-                zT[i,j,k] = z0[k]
             end
         end
     end
 
-    sol = zeros(Float64, 3)
     @inbounds for m in 2:T
         @show m
         @inbounds for i in 1:xlen
             @inbounds for j in 1:ylen 
                 @inbounds for k in 1:zlen
-                    @inbounds for τ in m-1:dt:Tin
-                        sol[:] = rk4singlestep((t,y) -> doublegyreVEC(t, y), dt, 
-                                            τ, [xT[i,j,k],yT[i,j,k],zT[i,j,k]])
+                    @inbounds for τ in m-1:dt:Tin+m
+                        sol_t[:,i,j,k,m] = rk4singlestep((t,y) -> doublegyreVEC(t, y), dt, 
+                                            τ, sol_t[:,i,j,k,m])
                     end
-                    xT[i,j,k] = sol[1]
-                    yT[i,j,k] = sol[2]
-                    zT[i,j,k] = sol[3]
-                    sol_t[:, i,j,k,m] = [sol[1],sol[2],sol[3]]
                 end
             end
         end
