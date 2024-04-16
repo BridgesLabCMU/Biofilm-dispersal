@@ -1,53 +1,30 @@
-using Images: imfilter, mapwindow, adjust_histogram!, LinearStretching, Gray, N0f16, N0f8,
-              Kernel, warp, axes, KernelFactors, RGB 
-using HistogramThresholding: find_threshold, Yen, Balanced 
-using IntegralArrays: IntegralArray
-using IntervalSets: width, leftendpoint, rightendpoint, Interval, ±
+using Images: imfilter, mapwindow, adjust_histogram!, LinearStretching, Gray, N0f16, N0f8, Kernel, RGB 
 using ImageView
+using HistogramThresholding: find_threshold, Otsu
 using StatsBase: mean, median, quantile
 using TiffImages
 using FileIO
 using NaturalSort: sort, natural
 using FLoops
 
-function mean_filter!(X, length_scale)
-    iX = IntegralArray(X)
-    @inbounds for i in CartesianIndex(1,1):CartesianIndex(size(X))
-        x, y = i.I
-        x_int = x±length_scale
-        y_int = y±length_scale
-        x_int = Interval(max(leftendpoint(x_int), 1), 
-                         min(rightendpoint(x_int), size(X)[1]))
-        y_int = Interval(max(leftendpoint(y_int), 1), 
-                         min(rightendpoint(y_int), size(X)[2]))
-        X[i] = iX[x_int, y_int]/(width(x_int)*width(y_int))
+function calculate_background!(stack, background, ntimepoints)
+    for t in 1:ntimepoints
+        @views background[:,:,t] = imfilter(stack[:,:,t], Kernel.gaussian(50))
     end
-    return nothing 
+    return nothing
 end
 
-function normalize_local_contrast(img, blockDiameter, fpMean)
-    img_copy = copy(img)
-    length_scale = Int((blockDiameter-1)/2)
-    mean_filter!(img_copy, length_scale)
-    img -= img_copy 
-    img .+= fpMean 
-    @. img[img < 0.0] = 0.0
-    @. img[img > 1.0] = 1.0
-    return img 
-end
-
-function compute_mask!(stack, masks, ntimepoints, blockDiameter, fpMean, constitutive)
-    prev_thresh = 0
+function compute_mask!(stack, background, masks, ntimepoints, constitutive)
+    imgs_noback = similar(stack)
     @inbounds for t in 1:ntimepoints
-        @views img = imfilter(normalize_local_contrast(stack[:,:,t], blockDiameter, fpMean), Kernel.gaussian(2))
-        imshow(img)
-        thresh = find_threshold(img, Balanced())
-        if thresh < prev_thresh
-            thresh = prev_thresh
-        end
-        mask = img .> thresh
-		masks[:,:,t] = mask
+        @views img = imfilter(stack[:,:,t] - background[:,:,t], Kernel.gaussian(2)) 
+        imgs_noback[:,:,t] = img
 	end
+    thresh = find_threshold(imgs_noback, Otsu()) - 0.00037
+    @inbounds for t in 1:ntimepoints
+        @views mask = imgs_noback[:,:,t] .> thresh
+		masks[:,:,t] = mask
+    end
 end
 
 function output_images!(stack, masks, overlay, output_dir, replicate)
@@ -69,12 +46,10 @@ end
 function main()
     dir = "/mnt/f/Sandhya_Imaging/Time_Lapses/Reporters/vpsL/" # Folder containing the images for strain X 
     files = sort([f for f in readdir(dir, join=true) if occursin(".ome.tif", f)], lt=natural)
-    shift_thresh = 100 
     sig = 2 
     constitutive = 2 # index for constitutive channel
     reporter = 1 # index for reporter channel
     ntimepoints = 17
-    blockDiameter = 401
     if isdir("$dir/results_images")
         rm("$dir/results_images"; recursive = true)
     end
@@ -88,19 +63,23 @@ function main()
     output_file = "$output_data_dir/data.jld2"
     data_matrix = Array{Float64, 2}(undef, ntimepoints, length(files))
     for (j, file) in enumerate(files)
-        height, width, channels, nslices, nframes = size(FileIO.load(file))
-        if nframes != ntimepoints
-            error("Number of timepoints in the image stack ($nframes) does not match the expected number of timepoints ($ntimepoints)")
-        end
-        @views images = Float64.(sum(reshape(TiffImages.load(file), 
-                                             (height, width, nslices, channels, nframes)), dims=3)[:,:,1,:,:])
+        images = TiffImages.load(file)
+        height, width, _ = size(images)
+        metadata = first(ifds(images))[TiffImages.IMAGEDESCRIPTION].data
+        Zloc = findfirst("SizeZ=", metadata)
+        Cloc = findfirst("SizeC=", metadata)
+        Tloc = findfirst("SizeT=", metadata)
+        nslices = tryparse(Int, metadata[(Zloc[4]+4):(Zloc[4]+5)])
+        channels = tryparse(Int, string(metadata[Cloc[4]+4]))
+        nframes = tryparse(Int, metadata[(Tloc[4]+4):(Tloc[4]+5)])
+        @views images = sum(Float64.(reshape(images, (height, width, nslices, channels, nframes))), dims=3)[:,:,1,:,:]
+        TiffImages.save("$output_img_dir/test.tif", Gray{N0f16}.(images[:,:,constitutive,:])) 
         @views output_stack = images[:,:,constitutive,:]
         masks = zeros(Bool, size(output_stack))
-		fpMax = maximum(output_stack) 
-		fpMin = minimum(output_stack) 
-		fpMean = (fpMax - fpMin) / 2.0 + fpMin
-        compute_mask!(output_stack, masks, 
-                      nframes, blockDiameter, fpMean, constitutive)
+        background = similar(output_stack)
+        calculate_background!(output_stack, background, nframes)
+        compute_mask!(output_stack, background, masks, 
+                      nframes, constitutive)
         @views reporter_stack = images[:,:,reporter,:]
         let output_stack = output_stack 
             @floop for t in 1:nframes

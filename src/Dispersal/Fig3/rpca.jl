@@ -71,22 +71,26 @@ function inexact_alm_rpca(D; λ=nothing, tol=1e-7, maxIter=1000)
 end
 
 function main()
-    data_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
-    files = sort([f for f in readdir(data_folder, join=true) if occursin("piv", f)], lt=natural) 
-    nfiles = length(files)
-    u_dummy = load(files[1], "u")
-    h, width, d = size(u_dummy)
-    data_matrix = Array{Float64}(undef, h*width*d*3, nfiles)
-    for i in 1:nfiles
-        u, v, w = load(files[i], "u", "v", "w")
-        data_matrix[:,i] = vcat(u[:], v[:], w[:] .* 4) 
+    data_folders = [f for f in readdir("/mnt/h/Dispersal", join=true) if isdir(f) && occursin("processed", f)]
+    for data_folder in data_folders
+        data_folder = data_folder*"/Displacements/"
+        @show data_folder
+        files = sort([f for f in readdir(data_folder, join=true) if occursin("piv", f)], lt=natural) 
+        nfiles = length(files)
+        u_dummy = load(files[1], "u")
+        h, width, d = size(u_dummy)
+        data_matrix = Array{Float64}(undef, h*width*d*3, nfiles)
+        for i in 1:nfiles
+            u, v, w = load(files[i], "u", "v", "w")
+            data_matrix[:,i] = vcat(u[:], v[:], w[:] .* 4) 
+        end
+        λ = 1 
+        tol = 1e-7
+        maxIter = 1000
+        L, S, iter_num = inexact_alm_rpca(data_matrix, λ=λ, tol=tol, maxIter=maxIter)
+        L = reshape(L, (h, width, d, 3, nfiles))
+        @views Lu, Lv, Lw = L[:,:,:,1,:], L[:,:,:,2,:], L[:,:,:,3,:]
+        save(data_folder*"rpca_result.jld2", Dict("u" => Lu, "v" => Lv, "w" => Lw))
     end
-    λ = 1 
-    tol = 1e-7
-    maxIter = 1000
-    L, S, iter_num = inexact_alm_rpca(data_matrix, λ=λ, tol=tol, maxIter=maxIter)
-    L = reshape(L, (h, width, d, 3, nfiles))
-    @views Lu, Lv, Lw = L[:,:,:,1,:], L[:,:,:,2,:], L[:,:,:,3,:]
-    save(data_folder*"rpca_result.jld2", Dict("u" => Lu, "v" => Lv, "w" => Lw))
 end
 main()

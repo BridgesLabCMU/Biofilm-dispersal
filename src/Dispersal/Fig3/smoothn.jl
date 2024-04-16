@@ -3,6 +3,7 @@ using LinearAlgebra
 using Statistics
 using Distributions
 using Optim
+using FileIO
 
 function smoothn(y; nS0=10, axis=nothing, smoothOrder=2.0, sd=nothing, verbose=false, s0=nothing, z0=nothing, isrobust=false, W=nothing, s=nothing, MaxIter=100, TolZ=1e-3, weightstr="bisquare")
     if sd !== nothing
@@ -10,18 +11,22 @@ function smoothn(y; nS0=10, axis=nothing, smoothOrder=2.0, sd=nothing, verbose=f
         mask = sd .> 0
         W[mask] .= 1.0 ./ sd[mask] .^ 2
     end
-
-    W ./= maximum(W) if W !== nothing
+    if W !== nothing
+        W ./= maximum(W) 
+    end
 
     sizy = size(y)
-    axis = axis === nothing ? 1:ndims(y) : axis
+    if axis === nothing 
+        axis = 1:ndims(y)
+    end
     noe = length(y)
 
     if noe < 2
         return y, s, 0, W
     end
-
-    W = ones(sizy) if W === nothing
+    if W === nothing
+        W = ones(sizy) 
+    end
     weightstr = lowercase(weightstr)
     IsFinite = isfinite.(y)
     nof = sum(IsFinite)
@@ -33,9 +38,9 @@ function smoothn(y; nS0=10, axis=nothing, smoothOrder=2.0, sd=nothing, verbose=f
     for i in axis
         siz0 = ones(Int, ndims(y))
         siz0[i] = size(y, i)
-        Lambda .+= cos.(pi * (collect(1:siz0[i]) .- 1.0) / siz0[i])
+        Lambda .+= reshape(cos.((collect(1:siz0[i]) .- 1.0) .* pi / siz0[i]), Tuple(siz0))
     end
-    Lambda .= -2.0 * (length(axis) - Lambda)
+    Lambda = -2.0 .* (length(axis) .- Lambda)
 
     if !isauto
         Gamma = 1.0 ./ (1 .+ (s .* abs.(Lambda)) .^ smoothOrder)
@@ -57,6 +62,7 @@ function smoothn(y; nS0=10, axis=nothing, smoothOrder=2.0, sd=nothing, verbose=f
     nit = 0
     RF = 1 + 0.75 * isweighted
 
+    exitflag = false
     while RobustIterativeProcess
         aow = sum(Wtot) / noe
         while tol > TolZ && nit < MaxIter
@@ -149,10 +155,24 @@ end
 
 function dctnd(data)
     if ndims(data) == 1
-        return dct(data, norm=:ortho)
+        return dct(data)
     elseif ndims(data) == 2
-        return dct(dct(data, dims=1, norm=:ortho), dims=2, norm=:ortho)
+        return dct(dct(data, 1), 2)
     elseif ndims(data) == 3
-        return dct(dct(dct(data, dims=1, norm=:ortho), dims=2, norm=:ortho), dims=3, norm=:ortho)
+        return dct(dct(dct(data, 1), 2), 3)
     end
 end
+
+function main()
+    vector_folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
+    vector_files = [f for f in readdir(vector_folder, join=true) if occursin("piv", f)]
+    for (i, file) in enumerate(vector_files) 
+        u, v, w = load(file, "u", "v", "w")
+        u, d1, d2, d3 = smoothn(u, s=0.01)
+        v, d1, d2, d3 = smoothn(v, s=0.01)
+        w, d1, d2, d3 = smoothn(w, s=0.01)
+        save(vector_folder*"smoothed_$(i).jld2", Dict("u" => u, "v" => v, "w" => w))
+    end
+end
+
+main()

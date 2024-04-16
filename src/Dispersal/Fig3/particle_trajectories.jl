@@ -38,59 +38,56 @@ function main()
     z = z .* 4
     z = z .+ 1
     y = y[end:-1:1]
-    
+
     u_int = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
     v_int = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
     w_int = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(1, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
 
     function doublegyreVEC(t, yin)
-        x, y, z = yin
-        u = u_int[x, y, z, t]
-        v = v_int[x, y, z, t]
-        w = w_int[x, y, z, t]
-        return [u, v, w]
+        @views shape = size(yin[1,:,:,:])
+        @views x = vec(yin[1,:,:,:])
+        @views y = vec(yin[2,:,:,:])
+        @views z = vec(yin[3,:,:,:])
+        t = zeros(Float64, size(x)) .+ t
+        u = reshape(u_int.(x, y, z, t), shape)
+        v = reshape(v_int.(x, y, z, t), shape)
+        w = reshape(w_int.(x, y, z, t), shape)
+        return permutedims(cat(u[:,:,:,:], v[:,:,:,:], w[:,:,:,:]; dims=4), (4,1,2,3))
     end
 
     # Constants
-    Delta = 1
     Nsim = ntimepoints  
-    dx = 30 
+    dt = 1 
+    T = Nsim*dt
+
+    # Set up a grid of particles
+    dx = 5 # particle every voxel  
     x0 = 1:dx:img_size[2]
     y0 = 1:dx:img_size[1]
     z0 = 1:dx:img_size[3]
     xlen = length(x0)
     ylen = length(y0)
     zlen = length(z0)
-    dt = 0.1  
-    dt2 = Delta
-    Tin = 40
-    T = Nsim*dt2
-    sol_t = zeros(Float64, 3, xlen, ylen, zlen, Nsim) 
+    sol = zeros(Float32, 3, xlen, ylen, zlen) 
 
     for i in 1:xlen
         for j in 1:ylen
             for k in 1:zlen
-                sol_t[1:3, i,j,k,1] = [x0[i], y0[j], z0[k]]
+                sol[:,i,j,k] = [x0[i], y0[j], z0[k]]
             end
         end
     end
+    save(folder*"trajectories_0.jld2", Dict("trajectories" => sol))
 
-    @inbounds for m in 2:T
-        @show m
-        @inbounds for i in 1:xlen
-            @inbounds for j in 1:ylen 
-                @inbounds for k in 1:zlen
-                    @inbounds for τ in m-1:dt:Tin+m
-                        sol_t[:,i,j,k,m] = rk4singlestep((t,y) -> doublegyreVEC(t, y), dt, 
-                                            τ, sol_t[:,i,j,k,m])
-                    end
-                end
-            end
-        end
+    @inbounds for m in 1:T/dt
+        time = m*dt
+        @show time
+        yout = rk4singlestep((t,y) -> doublegyreVEC(t,y), dt, time, sol)
+        sol = yout
+        save(folder*"trajectories_$(m).jld2", Dict("trajectories" => sol))
     end
-    save(folder*"trajectories.jld2", Dict("trajectories" => sol_t))
 end
 main()

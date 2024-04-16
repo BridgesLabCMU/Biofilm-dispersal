@@ -4,37 +4,41 @@ using Plots
 using NaturalSort
 using StatsBase
 using NaNStatistics
+using NaturalSort
+
+gr()
 
 function main()
     folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
-    file = [f for f in readdir(folder, join=true) if occursin("trajectories", f)][1]
+    files = sort([f for f in readdir(folder, join=true) if occursin("trajectories", f)], lt=natural)
+    _, nx, ny, nz = size(load(files[1], "trajectories"))
+    trajectories = zeros(3, nx, ny, nz, length(files))
+    for i in 1:length(files)
+        trajectories[:,:,:,:,i] = load(files[i], "trajectories")
+    end
+    trajectories = trajectories[:, 1:2:end, 1:2:end, 1:2:end, 1:20]
+    plt = plot(title = "Particle Trajectories", xlabel = "X", ylabel = "Y", zlabel = "Z", legend = false, xlimit=(0, nx), ylimit=(0, ny), zlimit=(0, nz))
 
-    trajectories = load(file, "trajectories") # (3, nx, ny, nz, nt) -- (nx, ny, nz) indexes each particle 
-    _, nx, ny, nz, nt = size(trajectories)
-	displacements = sum(abs.(trajectories[:, :, :, :, 1:nt] .- trajectories[:, :, :, :, 1]), dims=1)
+	# Determine and plot the trajectories of moving particles
+	_, nx, ny, nz, nt = size(trajectories)
+    @show nx*ny*nz
+	for i in 1:nx
+        @show i
+		for j in 1:ny
+			for k in 1:nz
+				x = trajectories[1, i, j, k, :]
+				y = trajectories[2, i, j, k, :]
+				z = trajectories[3, i, j, k, :]
 
-	# Find indices where displacement is non-zero
-	moving_particles_indices = findall(x -> x > 0, displacements)
-
-	# Prepare data for plotting
-	xs, ys, zs, times = [], [], [], []
-	for ind in moving_particles_indices
-		# Extracting the trajectory of the moving particle
-		traj = trajectories[:, ind[2], ind[3], ind[4], :]
-		for t in 1:nt
-			push!(xs, traj[1, t])
-			push!(ys, traj[2, t])
-			push!(zs, traj[3, t])
-			push!(times, t)
+				# Check if the particle has moved from its initial position
+				if any(x .!= x[1]) || any(y .!= y[1]) || any(z .!= z[1])
+					plot!(plt, x, y, z, label = "")  
+				end
+			end
 		end
 	end
 
-    @show size(xs)
-
-	# Plotting
-	pgfplotsx() # Interactive 3D plot
-	scatter(xs, ys, zs, zcolor=times, palette=:viridis, legend=false, xlabel="X", ylabel="Y", zlabel="Z", title="Particle Trajectories")
-
-    #save("$folder/quiver_test_inverted.png", fig)
+	# Display the plot
+	display(plt)
 end
 main()
