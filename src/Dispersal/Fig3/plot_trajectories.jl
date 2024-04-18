@@ -1,12 +1,11 @@
 using FileIO 
 using NPZ
-using Plots
 using NaturalSort
 using StatsBase
 using NaNStatistics
 using NaturalSort
-
-gr()
+using Revise 
+using GLMakie
 
 function main()
     folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
@@ -16,11 +15,13 @@ function main()
     for i in 1:length(files)
         trajectories[:,:,:,:,i] = load(files[i], "trajectories")
     end
-    trajectories = trajectories[:, 1:2:end, 1:2:end, 1:2:end, 1:20]
-    plt = plot(title = "Particle Trajectories", xlabel = "X", ylabel = "Y", zlabel = "Z", legend = false, xlimit=(0, nx), ylimit=(0, ny), zlimit=(0, nz))
+    trajectories = trajectories[:, 1:3:end, 1:3:end, 1:3:end, 1:15]
+    plt = GLMakie.Figure(fontsize = 30)
+    Axis3(plt[1, 1])
 
 	# Determine and plot the trajectories of moving particles
 	_, nx, ny, nz, nt = size(trajectories)
+    t = 1:nt
     @show nx*ny*nz
 	for i in 1:nx
         @show i
@@ -31,14 +32,16 @@ function main()
 				z = trajectories[3, i, j, k, :]
 
 				# Check if the particle has moved from its initial position
-				if any(x .!= x[1]) || any(y .!= y[1]) || any(z .!= z[1])
-					plot!(plt, x, y, z, label = "")  
+                dist = sqrt((x[end] - x[1])^2 + (y[end] - y[1])^2 + (z[end] - z[1])^2)
+                if dist > 20 && dist < 100 && !any(<(0), z) 
+                    ps = Point3f[[xi, yi, zi] for (xi, yi, zi) in zip(x, y, z)]
+					lines!(ps, color=t, linewidth=2, colormap=:inferno)  
 				end
 			end
 		end
 	end
 
 	# Display the plot
-	display(plt)
+	plt
 end
 main()
