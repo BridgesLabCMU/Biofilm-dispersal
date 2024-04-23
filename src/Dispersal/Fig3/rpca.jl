@@ -84,7 +84,7 @@ function main()
             u, v, w = load(files[i], "u", "v", "w")
             data_matrix[:,i] = vcat(u[:], v[:], w[:] .* 4) 
         end
-        λ = 1 
+        λ = 0.5 
         tol = 1e-7
         maxIter = 1000
         L, S, iter_num = inexact_alm_rpca(data_matrix, λ=λ, tol=tol, maxIter=maxIter)

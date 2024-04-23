@@ -1,35 +1,27 @@
+using TiffImages
 using Plots
 using LaTeXStrings
-using TiffImages: load, save
 using NaturalSort: sort, natural
 using StatsBase
 using ColorTypes: Gray, N0f16
 using ImageMorphology: label_components, component_lengths, component_centroids
 using Images: imresize, distance_transform, feature_transform
+using ImageView
 using HistogramThresholding: find_threshold, Otsu
 using FLoops
 using DelimitedFiles
+using Interpolations
+using FileIO
 
 pgfplotsx()
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function N_smallest(M, center_distance, biofilm_configuration, n)
-    M[center_distance .== 0] .= biofilm_configuration[center_distance .== 0]  
-    v = vec(M)
-    nonzero_indices = findall(x -> x != 0, v)
-    n = min(n, length(nonzero_indices))
-    if n == 0
-        return CartesianIndex[]
-    end
-    perm = partialsortperm(v[nonzero_indices], 1:n)
-    indices = CartesianIndices(M)[nonzero_indices[perm]]
-    return indices
-end
-
-function radial_averaging(files, images_folder, first_index, end_index, bin_interval, budget)
-    first_image = load("$images_folder/$(files[first_index])")
-    labels = label_components(first_image)
+function radial_averaging(mask_files, files, images_folder, first_index, end_index, bin_interval, intensity_thresholds, displacements_folder)
+    first_image = TiffImages.load("$images_folder/$(files[first_index])")
+    first_mask = zeros(Bool, size(first_image))
+    mask_image!(intensity_thresholds, first_mask, first_image)
+    labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
     center = centers[argmax(volumes[1:end])]
@@ -43,14 +35,13 @@ function radial_averaging(files, images_folder, first_index, end_index, bin_inte
     ntimepoints = end_index - first_index
     data_matrix = zeros(nbins-1, ntimepoints)
     for t in 1:ntimepoints
-        biofilm_configuration = load("$images_folder/$(files[first_index+t-1])")
-        N_voxels = N_smallest(biofilm_configuration .* center_distance, center_distance, 
-                              biofilm_configuration, budget[t])
-        @show N_voxels
-        biofilm_configuration .= 0
-        biofilm_configuration[N_voxels] .= 1 
+        image_t = Float32.(TiffImages.load("$images_folder/$(files[t+first_index])"))
+        image_tm1 = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-1])"))
+        deformed_img = zeros(Float32, size(image_t))
+        mask = zeros(Bool, size(image_t))
+        deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_folder, t+first_index-1, intensity_thresholds)
         for i in 1:size(data_matrix, 1) 
-            data_matrix[i, t] = -1*mean(biofilm_configuration[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
+            data_matrix[i, t] = mean(mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
     end
     return data_matrix
@@ -64,30 +55,33 @@ function main()
     plot_size = (350,300)
     plot_xlabel = "Time (h)"
     plot_ylabel = L"Distance from center ($\mu$m)"
-    plot_title = "Inside-out model"
+    plot_title = "Data"
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
+    image_folders = [f for f in image_folders if occursin("WT_replicate1", f)]
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
-        plot_filename = basename(images_folder)*"_in_out_pointwise" 
-        if isfile("$plots_folder/$plot_filename"*".svg")
-            continue
-        end
-        files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
+        plot_filename = basename(images_folder)*"_data_intensity" 
+        displacements_folder = "$(images_folder)/Displacements"
+        intensity_thresholds_file = "$(images_folder)/isotropic_intensity_thresholds.csv" 
+        files = sort([f for f in readdir(images_folder) if occursin("no_plank", f)], 
                                  lt=natural)
+        mask_files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
+                                 lt=natural)
+        intensity_thresholds = readdlm(intensity_thresholds_file, ',', Float64)[1:end,1]
         ntimepoints = length(files)
-        first_image = load("$images_folder/$(files[1])"; lazyio=true)
+        first_image = TiffImages.load("$images_folder/$(files[1])"; lazyio=true)
         height, width, slices = size(first_image)
         first_image = nothing
         net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
         first_index = argmax(net)
         end_index = min(first_index + 45, ntimepoints)
-        budget = -1 .* diff(net[first_index:end_index])
-        budget[budget .< 0] .= 0
-        data_matrix = radial_averaging(files, images_folder, first_index, end_index, 30, budget)
+
+        data_matrix = diff(radial_averaging(mask_files, files, images_folder, first_index, end_index, 30, intensity_thresholds, displacements_folder), dims=2)
+        data_matrix[data_matrix .> 0] .= 0
         replace!(data_matrix, Inf=>NaN)
         replace!(data_matrix, NaN=>0.0)
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
@@ -97,7 +91,7 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         c = cgrad(:Purples, rev=true)
         plt = heatmap(data_matrix, xticks=xs, yticks=ys, color=c, clim=(-0.1, 0),
-                      colorbar_title="Density change (a.u.)", colorbar_ticks=(-0.1:0.02:0), xformatter=xi -> xi*1/6, 
+                      colorbar_title="Density change (a.u.)", xformatter=xi -> xi*1/6, 
                       yformatter=yi -> yi/ytick_interval*n, size=plot_size)
         xlabel!(plt, plot_xlabel)
         ylabel!(plt, plot_ylabel)

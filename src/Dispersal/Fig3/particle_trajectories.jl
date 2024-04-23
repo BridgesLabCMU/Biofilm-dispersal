@@ -40,11 +40,11 @@ function main()
     y = y[end:-1:1]
 
     u_int = extrapolate(scale(interpolate(u_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), 0)
     v_int = extrapolate(scale(interpolate(v_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), 0)
     w_int = extrapolate(scale(interpolate(w_tot, BSpline(Cubic(Line(OnGrid())))), 
-                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), Line())
+                              (x, y, z, StepRangeLen(0, 1, ntimepoints))), 0)
 
     function doublegyreVEC(t, yin)
         @views shape = size(yin[1,:,:,:])
@@ -60,8 +60,8 @@ function main()
 
     # Constants
     Nsim = ntimepoints  
-    dt = 1 
-    T = Nsim*dt
+    dt = 0.1 
+    T = Nsim
 
     # Set up a grid of particles
     dx = 5 # particle every voxel  
@@ -82,12 +82,12 @@ function main()
     end
     save(folder*"trajectories_0.jld2", Dict("trajectories" => sol))
 
-    @inbounds for m in 1:T/dt
+    @inbounds for m in 0:T/dt
         time = m*dt
         @show time
         yout = rk4singlestep((t,y) -> doublegyreVEC(t,y), dt, time, sol)
         sol = yout
-        save(folder*"trajectories_$(m).jld2", Dict("trajectories" => sol))
+        save(folder*"particle_state_$(Int(m+1)).jld2", Dict("trajectories" => sol))
     end
 end
 main()

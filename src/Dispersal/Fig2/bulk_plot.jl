@@ -11,14 +11,14 @@ function main()
     default(titlefont = 20, legendfontsize = 15, 
             guidefont = (20, :black), colorbar_tickfontsize=15, colorbar_titlefontsize=20, tickfont = (15, :black), 
             guide = L"x", linewidth=2, grid=false, formatter=:plain)
-    plot_size = (400,350)
+    plot_size = (350,250)
 
     plots_folder = "/mnt/h/Dispersal/Plots"
-    files = [f for f in readdir(plots_folder, join=true) if occursin(".csv", f)]
+    files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f)]
     plot_xlabel = "Time (h)"
     plot_ylabel = "Biovolume (a.u.)" 
     logocolors = Colors.JULIA_LOGO_COLORS
-    p = plot(ylim=(0,1))
+    p = plot(ylim=(0,1), size=plot_size)
     WT_seen = false
     cheY_seen = false
     rbmB_seen = false
@@ -67,7 +67,7 @@ function main()
         end
         xs = 0:6:length(data)-1
         xaxis = 1:length(data)
-        plot!(p, xaxis, data, marker=:circle, color=c, xticks=xs, xformatter=xi -> xi*1/6, label=condition)
+        plot!(p, xaxis, data, marker=:circle, markersize=3, color=c, xticks=xs, xformatter=xi -> xi*1/6, label=condition)
     end
     xlabel!(p, plot_xlabel)
     ylabel!(p, plot_ylabel)

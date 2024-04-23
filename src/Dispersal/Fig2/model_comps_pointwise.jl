@@ -23,18 +23,16 @@ function main()
     plot_xlabel = "Time (h)"
     plot_ylabel = "J-S divergence"
     plots_folder = "/mnt/h/Dispersal/Plots"
-    files = [f for f in readdir(plots_folder, join=true) if occursin("data", f) && occursin("csv", f) && occursin("lapG", f)]
-    @show files
+    files = [f for f in readdir(plots_folder, join=true) if occursin("data", f) && occursin("csv", f) && occursin("WT", f)]
     in_out_total = Array{Float64, 1}(undef, length(files))
     out_in_total = Array{Float64, 1}(undef, length(files))
     random_total = Array{Float64, 1}(undef, length(files))
     colors = theme_palette(:auto)
     for (i, file) in enumerate(files)
         data = readdlm(file, ',')[1:end,1:end,1]
-        @show size(data)
-        in_out = readdlm(file[1:end-9]*"_in_out.csv", ',')[1:end,1:end,1]
-        out_in = readdlm(file[1:end-9]*"_out_in.csv", ',')[1:end,1:end,1]
-        random = readdlm(file[1:end-9]*"_random.csv", ',')[1:end,1:end,1]
+        in_out = readdlm(file[1:end-9]*"_in_out_pointwise.csv", ',')[1:end,1:end,1]
+        out_in = readdlm(file[1:end-9]*"_out_in_pointwise.csv", ',')[1:end,1:end,1]
+        random = readdlm(file[1:end-9]*"_random_pointwise.csv", ',')[1:end,1:end,1]
         in_out_comp = Array{Float64}(undef, size(data,2))
         out_in_comp = Array{Float64}(undef, size(data,2))
         random_comp = Array{Float64}(undef, size(data,2))
@@ -55,13 +53,13 @@ function main()
         scatter!(p, xaxis, random_comp, xticks=xs, xformatter=xi -> xi*1/6, size=plot_size, label="Random")
         xlabel!(p, plot_xlabel)
         ylabel!(p, plot_ylabel)
-        savefig(p, file[1:end-9]*"_comps.svg")
+        savefig(p, file[1:end-9]*"_comps_pointwise.svg")
     end
     p = plot(ylim=(0,1), xticks=([1,2,3],["Inside-out", "Outside-in", "Random"]), xrotation=45, size=plot_size2, leg=false)
     boxplot!(p, [in_out_total, out_in_total, random_total], linewidth = 1.0, outliers=false)
     xlabel!(p, "")
     ylabel!(p, "Average J-S divergence")
-    savefig(p, files[1][1:end-18]*"_comps_summarized.svg")
+    savefig(p, files[1][1:end-18]*"_comps_pointwise_summarized.svg")
 end
 
 main()

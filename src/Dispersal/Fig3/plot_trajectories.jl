@@ -9,13 +9,13 @@ using GLMakie
 
 function main()
     folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
-    files = sort([f for f in readdir(folder, join=true) if occursin("trajectories", f)], lt=natural)
+    files = sort([f for f in readdir(folder, join=true) if occursin("particle_state", f)], lt=natural)
     _, nx, ny, nz = size(load(files[1], "trajectories"))
-    trajectories = zeros(3, nx, ny, nz, length(files))
-    for i in 1:length(files)
+    trajectories = zeros(3, nx, ny, nz, length(100:450))
+    for i in 1:length(100:450)
         trajectories[:,:,:,:,i] = load(files[i], "trajectories")
     end
-    trajectories = trajectories[:, 1:3:end, 1:3:end, 1:3:end, 1:15]
+    trajectories = trajectories[:, 1:3:end, 1:3:end, 1:3:end, :]
     plt = GLMakie.Figure(fontsize = 30)
     Axis3(plt[1, 1])
 

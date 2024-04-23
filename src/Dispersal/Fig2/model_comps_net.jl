@@ -14,11 +14,11 @@ pgfplotsx()
 
 function model_comparison(A, B)
     # A = Data, B = model
-    net_A = sum(A)
-    net_B = sum(B)
+    #net_A = sum(A)
+    #net_B = sum(B)
     D = 0
     for i in eachindex(A)
-        D += A[i] * (log(A[i]/B[i]) + log(net_B) - log(net_A))
+        D += (A[i]-B[i])^2#A[i] * (log(A[i]/B[i]) + log(net_B) - log(net_A))
     end
     return D
 end
@@ -30,8 +30,7 @@ function main()
             guide = L"x", linewidth=2, grid=false, formatter=:plain)
     plot_size2 = (300,250)
     plots_folder = "/mnt/h/Dispersal/Plots"
-    files = [f for f in readdir(plots_folder, join=true) if occursin("data", f) && occursin("csv", f) && occursin("lapG", f)]
-    @show files
+    files = [f for f in readdir(plots_folder, join=true) if occursin("data", f) && occursin("csv", f) && occursin("WT", f)]
     in_out_total = Array{Float64, 1}(undef, length(files))
     out_in_total = Array{Float64, 1}(undef, length(files))
     random_total = Array{Float64, 1}(undef, length(files))
@@ -45,10 +44,10 @@ function main()
         out_in_total[i] = model_comparison(data, out_in)
         random_total[i] = model_comparison(data, random)
     end
-    p = plot(ylim=(0,1), xticks=([1,2,3],["Inside-out", "Outside-in", "Random"]), xrotation=45, size=plot_size2, leg=false)
+    p = plot(ylim=(0,Inf), xticks=([1,2,3],["Inside-out", "Outside-in", "Random"]), xrotation=45, size=plot_size2, leg=false)
     boxplot!(p, [in_out_total, out_in_total, random_total], linewidth = 1.0, outliers=false)
     xlabel!(p, "")
-    ylabel!(p, "Similarity (a.u.)")
+    ylabel!(p, L"(Data-model)$^2$")
     savefig(p, files[1][1:end-18]*"_comps_summarized.svg")
 end
 
