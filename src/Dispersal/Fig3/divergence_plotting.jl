@@ -20,20 +20,46 @@ function choose_label(folder)
     end
 end
 
+function movingaverage(X::Vector,numofele::Int)
+    BackDelta = div(numofele,2) 
+    ForwardDelta = isodd(numofele) ? div(numofele,2) : div(numofele,2) - 1
+    len = length(X)
+    Y = similar(X)
+    for n = 1:len
+        lo = max(1,n - BackDelta)
+        hi = min(len,n + ForwardDelta)
+        Y[n] = mean(X[lo:hi])
+    end
+    return Y
+end
+
 function calculate_divergence(u, v, w, dx, dy, dz)
     nx, ny, nz = size(u)
     net_divergence = 0.0
     for k in 1:nz
         for j in 1:ny
             for i in 1:nx
-				dudx = i==nx ? (u[i,j,k]-u[i-1,j,k])/dx : i==1 ? (u[i+1,j,k]-u[i,j,k])/dx : (u[i+1,j,k]-u[i-1,j,k])/(2dx)
-                dvdy = j==ny ? (v[i,j,k]-v[i,j-1,k])/dy : j==1 ? (v[i,j+1,k]-v[i,j,k])/dy : (v[i,j+1,k]-v[i,j-1,k])/(2dy)
-                dwdz = k==nz ? (w[i,j,k]-w[i,j,k-1])/dz : k==1 ? (w[i,j,k+1]-w[i,j,k])/dz : (w[i,j,k+1]-w[i,j,k-1])/(2dz)
-                net_divergence += dudx + dvdy + dwdz
+                if !isnan(u[i,j,k])
+                    dudx = (i==nx && !isnan(u[i-1,j,k])) ? (u[i,j,k]-u[i-1,j,k])/dx : (i==1 && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i,j,k])/dx : (i!=nx && i!=1 && !isnan(u[i-1,j,k]) && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i-1,j,k])/(2dx) : NaN 
+				else
+                    dudx = NaN 
+                end
+                if !isnan(v[i,j,k])
+                    dvdy = (j==ny && !isnan(v[i,j-1,k])) ? (v[i,j,k]-v[i,j-1,k])/dx : (j==1 && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j,k])/dx : (j!=ny && j!=1 && !isnan(v[i,j-1,k]) && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j-1,k])/(2dx) : NaN 
+                else
+                    dvdy = NaN 
+                end
+                if !isnan(w[i,j,k])
+                    dwdz = (k==nz && !isnan(w[i,j,k-1])) ? (w[i,j,k]-w[i,j,k-1])/dx : (k==1 && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k])/dx : (k!=nz && k!=1 && !isnan(w[i,j,k-1]) && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k-1])/(2dx) : NaN 
+                else
+                    dwdz = NaN 
+                end
+                if !isnan(dudx + dvdy + dwdz)
+                    net_divergence += dudx + dvdy + dwdz
+                end
             end
         end
     end
-    net_divergence /= nx*ny*nz
     return net_divergence
 end
 
@@ -88,16 +114,21 @@ function main()
         bulk_data = readdlm(bulk_file, ',', Int)[1:end,1]
         first_idx = argmax(bulk_data)
         end_idx = min(first_idx+45, length(bulk_data))
-        rpca_files = [f for f in readdir(vector_folder, join=true) if occursin("rpca", f)]
-        u, v, w = load(rpca_files[1], "u", "v", "w")
+        piv_files = [f for f in readdir(vector_folder, join=true) if occursin("piv", f)]
         divergences = Array{Float64, 1}(undef, end_idx-first_idx+1)
         for i in first_idx:end_idx 
-            @views ui = permutedims(u[:,:,:,i], [2,1,3])
-            @views vi = permutedims(v[:,:,:,i], [2,1,3])
-            @views wi = permutedims(w[:,:,:,i], [2,1,3])
+            u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
+            ui = permutedims(u, [2,1,3])
+            vi = permutedims(v, [2,1,3])
+            wi = permutedims(w, [2,1,3])
+            flags = permutedims(flags, [2,1,3])
+            ui[flags .> 0] .= NaN
+            vi[flags .> 0] .= NaN
+            wi[flags .> 0] .= NaN
             net_divergence = calculate_divergence(ui, vi, wi, dx, dy, dz)
             divergences[i-first_idx+1] = net_divergence
         end
+        divergences = movingaverage(divergences, 8)
         xs = 0:6:length(divergences)-1
         xaxis = 1:length(divergences)
         lab = choose_label(vector_folder)
@@ -138,22 +169,26 @@ function main()
                 lapG_seen = true
             end
         end
-        scatter!(p, xaxis, divergences, mc=c, ma=0.1, xticks=xs, xformatter=xi -> xi*1/6, label="")
+        #scatter!(p, xaxis, divergences, mc=c, ma=0.1, xticks=xs, xformatter=xi -> xi*1/6, label="")
     end
     WT_averages = hcat(WT_averages...)
-    WT_averages = mean(WT_averages, dims=2)
+    WT_mean = mean(WT_averages, dims=2)
+    WT_stds = std(WT_averages, dims=2)
     cheY_averages = hcat(cheY_averages...)
-    cheY_averages = mean(cheY_averages, dims=2)
+    cheY_mean = mean(cheY_averages, dims=2)
+    cheY_stds = std(cheY_averages, dims=2)
     rbmB_averages = hcat(rbmB_averages...)
-    rbmB_averages = mean(rbmB_averages, dims=2)
+    rbmB_mean = mean(rbmB_averages, dims=2)
+    rbmB_stds = std(rbmB_averages, dims=2)
     lapG_averages = hcat(lapG_averages...)
-    lapG_averages = mean(lapG_averages, dims=2)
-    xaxis = 1:length(WT_averages)
-    xs = 0:6:length(WT_averages)-1
-    plot!(p, xaxis, WT_averages, c=logocolors.blue, xticks=xs, xformatter=xi -> xi*1/6, label="Wild-type")
-    plot!(p, xaxis, cheY_averages, c=logocolors.green, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta cheY$")
-    plot!(p, xaxis, rbmB_averages, c=:coral2, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta rbmB$")
-    plot!(p, xaxis, lapG_averages, c=logocolors.purple, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta lapG$")
+    lapG_mean = mean(lapG_averages, dims=2)
+    lapG_stds = std(lapG_averages, dims=2)
+    xaxis = 1:length(WT_mean)
+    xs = 0:6:length(WT_mean)-1
+    plot!(p, xaxis, WT_mean, c=logocolors.blue, xticks=xs, xformatter=xi -> xi*1/6, label="Wild-type")
+    plot!(p, xaxis, cheY_mean, c=logocolors.green, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta cheY$")
+    plot!(p, xaxis, rbmB_mean, c=:coral2, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta rbmB$")
+    plot!(p, xaxis, lapG_mean, c=logocolors.purple, xticks=xs, xformatter=xi -> xi*1/6, label=L"$\Delta lapG$")
     xlabel!(p, plot_xlabel)
     ylabel!(p, plot_ylabel)
     savefig(p, plots_folder*"/all_convergence.svg")

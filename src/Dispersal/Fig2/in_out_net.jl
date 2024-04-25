@@ -48,10 +48,16 @@ function radial_averaging(files, images_folder, first_index, end_index, bin_inte
         dispersal_config .= 0 
         N_voxels = N_smallest(biofilm_configuration .* center_distance, center_distance, 
                               biofilm_configuration, budget[t])
-        biofilm_configuration[N_voxels] .= 0 
-        dispersal_config[N_voxels] .= 1 
-        for i in 1:size(data_matrix, 1) 
-            data_matrix[i, t] = -1*mean(dispersal_config[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
+        if N_voxels == CartesianIndex[]
+            for i in 1:size(data_matrix, 1) 
+                data_matrix[i, t] = 0 
+            end
+        else
+            biofilm_configuration[N_voxels] .= 0 
+            dispersal_config[N_voxels] .= 1 
+            for i in 1:size(data_matrix, 1) 
+                data_matrix[i, t] = -1*mean(dispersal_config[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
+            end
         end
     end
     return data_matrix
