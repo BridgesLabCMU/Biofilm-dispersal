@@ -9,7 +9,6 @@ using ImageMorphology
 
 filters = pyimport("skimage.filters")
 
-
 function set_boundary_voxels_to_zero(image, distance)
     nx, ny, nz = size(image)
     mask = trues(size(image))
@@ -17,6 +16,19 @@ function set_boundary_voxels_to_zero(image, distance)
     dist_transform = distance_transform(feature_transform(mask))
     image[dist_transform .<= distance] .= false
     return image
+end
+
+function compute_com(mask, LCS)
+	mask = label_components(mask)
+	areas = component_lengths(mask)
+	max_label = argmax(areas[1:end])
+	mask[mask .!= max_label] .= 0
+	mask[mask .== max_label] .= 1 
+    center_of_mass = component_centroids(mask)[1]
+    relative_com = [x for x in center_of_mass] ./ [x for x in size(mask)] 
+    center_of_mass = permutedims(relative_com, (2,1,3)) .* [x for x in size(LCS)] .- 1
+    center_of_mass[3] = 0
+	return center_of_mass
 end
 
 function extract_lcs(ftle_field, thresh)
@@ -31,7 +43,7 @@ function main()
     folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/"
     images_folder = "/mnt/h/Dispersal/WT_replicate1_processed/"
     mask_files = sort([f for f in readdir(images_folder, join=true) if occursin("mask_isotropic", f)], lt=natural)
-    mask_t1 = load(mask_files[10])
+    mask_t1 = load(mask_files[1])
     files = sort([f for f in readdir(folder, join=true) if occursin("FTLE", f)], lt=natural)
     piv_files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
     dummy_file = load(files[1], "forward_LCS")
@@ -43,9 +55,10 @@ function main()
     end
     backward_plot = sum(backward_LCS[:,:,:,10:45], dims=4)[:,:,:,1]
     backward_LCS = extract_lcs(backward_plot, 0.2)
+    center_of_mass = compute_com(mask_t1)
     fig = Figure(fontsize=30)
     Axis3(fig[1, 1])
-    ps = Point3f[[xi, yi, zi] for xi in 1:height, yi in 1:width, zi in 1:depth if backward_LCS[xi, yi, zi] == 1]
+    ps = Point3f[[xi-center_of_mass[1], yi-center_of_mass[2], zi] for xi in 1:height, yi in 1:width, zi in 1:depth if backward_LCS[xi, yi, zi] == 1]
     cs = [zi for xi in 1:height, yi in 1:width, zi in 1:depth if backward_LCS[xi, yi, zi] == 1]
     scatter!(ps, color=cs, colormap=:magma, markersize = 20)
     fig
