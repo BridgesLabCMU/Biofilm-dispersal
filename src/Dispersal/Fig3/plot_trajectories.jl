@@ -35,6 +35,7 @@ function main()
                 dist = sqrt((x[end] - x[1])^2 + (y[end] - y[1])^2 + (z[end] - z[1])^2)
                 if dist > 20 && dist < 100 && !any(<(0), z) 
                     ps = Point3f[[xi, yi, zi] for (xi, yi, zi) in zip(x, y, z)]
+                    @show ps
 					lines!(ps, color=t, linewidth=2, colormap=:inferno)  
 				end
 			end

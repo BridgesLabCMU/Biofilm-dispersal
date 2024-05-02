@@ -9,10 +9,10 @@ using Makie.Colors
 
 function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
-    files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f)]
+    files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f) && occursin("WT", f)]
     plot_xlabel = "Time (h)"
     plot_ylabel = "Biovolume (a.u.)" 
-    fig=Figure(size=(5*72, 2.5*72))
+    fig=Figure(size=(3.5*72, 2.5*72))
     ax = Axis(fig[1,1])
     WT_seen = false
     cheY_seen = false
@@ -69,7 +69,6 @@ function main()
         xaxis /= 6
         lines!(ax, xaxis, data, color=color, colormap=colormap, colorrange = (1, 4), label=condition)
     end
-    fig[1,2] = Legend(fig, ax, merge = true, unique = true, framevisible=false, labelsize=12, rowgap=0)
     ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel
     ax.title = ""
@@ -77,7 +76,7 @@ function main()
     ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
-    save(plots_folder*"/WT_cheY_lapG_rbmB_bulk.svg", fig)
+    save(plots_folder*"/WT_bulk.svg", fig)
 end
 
 main()

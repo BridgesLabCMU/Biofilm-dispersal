@@ -59,22 +59,7 @@ function main()
                       "/mnt/h/Dispersal/WT_replicate2_processed/Displacements/", 
                       "/mnt/h/Dispersal/WT_replicate3_processed/Displacements/", 
                       "/mnt/h/Dispersal/WT_replicate4_processed/Displacements/", 
-                      "/mnt/h/Dispersal/WT_replicate5_processed/Displacements/", 
-                      "/mnt/h/Dispersal/cheY_replicate1_processed/Displacements/", 
-                      "/mnt/h/Dispersal/cheY_replicate2_processed/Displacements/", 
-                      "/mnt/h/Dispersal/cheY_replicate3_processed/Displacements/", 
-                      "/mnt/h/Dispersal/cheY_replicate4_processed/Displacements/", 
-                      "/mnt/h/Dispersal/cheY_replicate5_processed/Displacements/", 
-                      "/mnt/h/Dispersal/lapG_replicate1_processed/Displacements/", 
-                      "/mnt/h/Dispersal/lapG_replicate2_processed/Displacements/", 
-                      "/mnt/h/Dispersal/lapG_replicate3_processed/Displacements/", 
-                      "/mnt/h/Dispersal/lapG_replicate4_processed/Displacements/", 
-                      "/mnt/h/Dispersal/lapG_replicate5_processed/Displacements/", 
-                      "/mnt/h/Dispersal/rbmB_replicate1_processed/Displacements/", 
-                      "/mnt/h/Dispersal/rbmB_replicate2_processed/Displacements/", 
-                      "/mnt/h/Dispersal/rbmB_replicate3_processed/Displacements/", 
-                      "/mnt/h/Dispersal/rbmB_replicate4_processed/Displacements/", 
-                      "/mnt/h/Dispersal/rbmB_replicate5_processed/Displacements/"]
+                      "/mnt/h/Dispersal/WT_replicate5_processed/Displacements/"]
     dx = 8
     dy = 8
     dz = 8
@@ -83,11 +68,8 @@ function main()
     rbmB_seen = false
     lapG_seen = false
     bulk_files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f)]
-    logocolors = Colors.JULIA_LOGO_COLORS
-    WT_averages = []
-    cheY_averages = []
-    rbmB_averages = []
-    lapG_averages = []
+    WT_dispersal = []
+    WT_growth = []
     conditions = []
     for vector_folder in vector_folders
         bulk_file = [f for f in bulk_files if occursin(split(vector_folder, "/")[end-2], f)][1]
@@ -95,7 +77,23 @@ function main()
         first_idx = argmax(bulk_data)
         end_idx = min(first_idx+45, length(bulk_data))
         piv_files = [f for f in readdir(vector_folder, join=true) if occursin("piv", f)]
-        divergences = Array{Float64, 1}(undef, end_idx-first_idx+1)
+        dispersal_divergences = Array{Float64, 1}(undef, end_idx-first_idx+1)
+        growth_divergences = Array{Float64, 1}(undef, first_idx-1)
+        for i in 1:first_idx-1 
+            u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
+            ui = permutedims(u, [2,1,3])
+            vi = permutedims(v, [2,1,3])
+            wi = permutedims(w, [2,1,3])
+            flags = permutedims(flags, [2,1,3])
+            ui[flags .> 0] .= NaN
+            vi[flags .> 0] .= NaN
+            wi[flags .> 0] .= NaN
+            net_divergence = calculate_divergence(ui, vi, wi, dx, dy, dz)
+            growth_divergences[i] = net_divergence
+        end
+        growth_divergences = mean(growth_divergences) 
+        push!(WT_growth, growth_divergences)
+        push!(conditions, "Growth")
         for i in first_idx:end_idx 
             u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
             ui = permutedims(u, [2,1,3])
@@ -106,59 +104,18 @@ function main()
             vi[flags .> 0] .= NaN
             wi[flags .> 0] .= NaN
             net_divergence = calculate_divergence(ui, vi, wi, dx, dy, dz)
-            divergences[i-first_idx+1] = net_divergence
+            dispersal_divergences[i-first_idx+1] = net_divergence
         end
-        divergences = mean(divergences) 
-        lab = choose_label(vector_folder)
-        if lab == "WT"
-            push!(WT_averages, divergences)
-            c = logocolors.blue
-            if WT_seen
-                condition = ""
-            else
-                condition = "Wild-type"
-                WT_seen = true
-                push!(conditions, "Wild-type")
-            end
-        elseif lab == "cheY"
-            push!(cheY_averages, divergences)
-            c = logocolors.green
-            if cheY_seen
-                condition = ""
-            else
-                condition = latexstring("\\Delta $(lab)")
-                cheY_seen = true
-                push!(conditions, rich("Δ", rich("cheY"; font=:italic)))
-            end
-        elseif lab == "rbmB"
-            push!(rbmB_averages, divergences)
-            c = :coral2 
-            if rbmB_seen
-                condition = ""
-            else
-                condition = latexstring("\\Delta $(lab)")
-                rbmB_seen = true
-                push!(conditions, rich("Δ", rich("rbmB"; font=:italic)))
-            end
-        elseif lab == "lapG"
-            push!(lapG_averages, divergences)
-            c = logocolors.purple
-            if lapG_seen
-                condition = ""
-            else
-                condition = latexstring("\\Delta $(lab)")
-                lapG_seen = true
-                push!(conditions, rich("Δ", rich("lapG"; font=:italic)))
-            end
-        end
+        dispersal_divergences = mean(dispersal_divergences) 
+        push!(WT_dispersal, dispersal_divergences)
+        push!(conditions, "Dispersal")
     end
-    data = vcat(WT_averages, cheY_averages, lapG_averages, rbmB_averages)
-    category_num = Int.(repeat(1:4, inner = 5))
-    fig = Figure(size=(3*72, 3*72))
+    data = vcat(WT_growth, WT_dispersal)
+    category_num = Int.(repeat(1:2, inner = 5))
+    fig = Figure(size=(2.5*72, 3*72))
     ax = Axis(fig[1, 1])
-    colormap = Makie.to_colormap(:Pastel1_4)
-    boxplot!(ax, category_num, Float64.(data); show_outliers=false, color=map(category_num->mod1(category_num,4),category_num), colormap, colorrange=(1,4))
-    ax.xticks=(1:4, conditions)
+    boxplot!(ax, category_num, Float64.(data); show_outliers=false, color="#fbb4ae")
+    ax.xticks=(1:2, unique(conditions))
     ax.xticklabelrotation=45
     ax.xlabel=""
     ax.ylabel=rich("Divergence rate (h", superscript("-1"), ")")
@@ -167,7 +124,7 @@ function main()
     ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
-    save(plots_folder*"/all_convergence.svg", fig)
+    save(plots_folder*"/WT_convergence.svg", fig)
 end
 
 main()

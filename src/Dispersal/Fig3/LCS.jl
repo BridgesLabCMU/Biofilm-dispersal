@@ -17,6 +17,7 @@ function main()
     images_folder = dirname(dirname(folder))
     images = sort([f for f in readdir(images_folder, join=true) if occursin("isotropic.tif", f) && occursin("no_plank", f)], 
                   lt=natural)
+    @show images
     img_size = size(TiffImages.load(images[1]; lazyio=true))
     files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
     ntimepoints = length(files)
@@ -26,10 +27,13 @@ function main()
     v_tot = zeros(width, height, nslices, ntimepoints)
     w_tot = zeros(width, height, nslices, ntimepoints)
     for i in 1:length(files)
-        u, v, w = load(files[i], "u", "v", "w")
-        u_tot[:,:,:,i] = permutedims(u[end:-1:1,:,:], (2,1,3))
-        v_tot[:,:,:,i] = permutedims(v[end:-1:1,:,:], (2,1,3))
-        w_tot[:,:,:,i] = permutedims(w[end:-1:1,:,:], (2,1,3))
+        u, v, w, flags = load(files[i], "u", "v", "w", "flags")
+        u[flags .!= 0] .= 0
+        v[flags .!= 0] .= 0
+        w[flags .!= 0] .= 0
+        @views u_tot[:,:,:,i] = permutedims(u[end:-1:1,:,:], (2,1,3))
+        @views v_tot[:,:,:,i] = permutedims(v[end:-1:1,:,:], (2,1,3))
+        @views w_tot[:,:,:,i] = permutedims(w[end:-1:1,:,:], (2,1,3))
     end
 
     w_tot .*= 4
@@ -58,7 +62,7 @@ function main()
     end
 
     # Constants
-    dx = 5
+    dx = 4 
     x0 = 1:dx:img_size[2]
     y0 = 1:dx:img_size[1]
     z0 = 1:dx:img_size[3]
@@ -77,7 +81,7 @@ function main()
     for i in 1:xlen
         for j in 1:ylen
             for k in 1:zlen
-                yIC[:,i,j,k] = [x0[i], y0[j], z0[k]]
+                @views yIC[:,i,j,k] = [x0[i], y0[j], z0[k]]
             end
         end
     end
@@ -90,47 +94,47 @@ function main()
             yin_for = yout
         end
         
-		xT = yin_for[1,:,:,:]
-        yT = yin_for[2,:,:,:]
-        zT = yin_for[3,:,:,:]
+		@views xT = yin_for[1,:,:,:]
+        @views yT = yin_for[2,:,:,:]
+        @views zT = yin_for[3,:,:,:]
 
         D = zeros(Float64, 3, 3)
         for i in 1:xlen
             for j in 1:ylen
                 for k in 1:zlen
-					dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
+					@views dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
 							 i == xlen ? (xT[i,j,k] - xT[i-1,j,k])/dx :
 							 (xT[i+1,j,k] - xT[i-1,j,k])/(2*dx)
 
-					dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
+					@views dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
 							 j == ylen ? (xT[i,j,k] - xT[i,j-1,k])/dx :
 							 (xT[i,j+1,k] - xT[i,j-1,k])/(2*dx)
 
-					dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
+					@views dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
 							 k == zlen ? (xT[i,j,k] - xT[i,j,k-1])/dx :
 							 (xT[i,j,k+1] - xT[i,j,k-1])/(2*dx)
 
-					dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
+					@views dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
 							 i == xlen ? (yT[i,j,k] - yT[i-1,j,k])/dx :
 							 (yT[i+1,j,k] - yT[i-1,j,k])/(2*dx)
 
-					dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
+					@views dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
 							 j == ylen ? (yT[i,j,k] - yT[i,j-1,k])/dx :
 							 (yT[i,j+1,k] - yT[i,j-1,k])/(2*dx)
 
-					dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
+					@views dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
 							 k == zlen ? (yT[i,j,k] - yT[i,j,k-1])/dx :
 							 (yT[i,j,k+1] - yT[i,j,k-1])/(2*dx)
 
-					dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
+					@views dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
 							 i == xlen ? (zT[i,j,k] - zT[i-1,j,k])/dx :
 							 (zT[i+1,j,k] - zT[i-1,j,k])/(2*dx)
 
-					dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
+					@views dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
 							 j == ylen ? (zT[i,j,k] - zT[i,j-1,k])/dx :
 							 (zT[i,j+1,k] - zT[i,j-1,k])/(2*dx)
 
-					dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
+					@views dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
 							 k == zlen ? (zT[i,j,k] - zT[i,j,k-1])/dx :
 							 (zT[i,j,k+1] - zT[i,j,k-1])/(2*dx)
                     D[1,1] = dxTdx0
@@ -142,12 +146,12 @@ function main()
                     D[3,1] = dzTdx0
                     D[3,2] = dzTdy0
                     D[3,3] = dzTdz0
-                    solfor[i,j,k] = abs(1/Tin) * maximum(eigvals(D'*D))
+                    solfor[i,j,k] = abs(1/Tin) * log(sqrt(maximum(eigvals(D'*D))))
                 end
             end
         end
-        @views solformin = minimum(solfor)
-        @views solformax = maximum(solfor)
+        solformin = minimum(solfor)
+        solformax = maximum(solfor)
         solfor .-= solformin 
         solfor ./= solformax - solformin 
 
@@ -156,47 +160,47 @@ function main()
             yout = rk4singlestep((t,y) -> doublegyreVEC(t,y), -dt, τ, yin_bac)
             yin_bac = yout
         end
-        xT = yin_bac[1,:,:,:]
-        yT = yin_bac[2,:,:,:]
-        zT = yin_bac[3,:,:,:]
+        @views xT = yin_bac[1,:,:,:]
+        @views yT = yin_bac[2,:,:,:]
+        @views zT = yin_bac[3,:,:,:]
 
         D = zeros(Float64, 3, 3)
         for i in 1:xlen
             for j in 1:ylen
                 for k in 1:zlen
-					dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
+					@views dxTdx0 = i == 1 ? (xT[i+1,j,k] - xT[i,j,k])/dx :
 							 i == xlen ? (xT[i,j,k] - xT[i-1,j,k])/dx :
 							 (xT[i+1,j,k] - xT[i-1,j,k])/(2*dx)
 
-					dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
+					@views dxTdy0 = j == 1 ? (xT[i,j+1,k] - xT[i,j,k])/dx :
 							 j == ylen ? (xT[i,j,k] - xT[i,j-1,k])/dx :
 							 (xT[i,j+1,k] - xT[i,j-1,k])/(2*dx)
 
-					dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
+					@views dxTdz0 = k == 1 ? (xT[i,j,k+1] - xT[i,j,k])/dx :
 							 k == zlen ? (xT[i,j,k] - xT[i,j,k-1])/dx :
 							 (xT[i,j,k+1] - xT[i,j,k-1])/(2*dx)
 
-					dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
+					@views dyTdx0 = i == 1 ? (yT[i+1,j,k] - yT[i,j,k])/dx :
 							 i == xlen ? (yT[i,j,k] - yT[i-1,j,k])/dx :
 							 (yT[i+1,j,k] - yT[i-1,j,k])/(2*dx)
 
-					dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
+					@views dyTdy0 = j == 1 ? (yT[i,j+1,k] - yT[i,j,k])/dx :
 							 j == ylen ? (yT[i,j,k] - yT[i,j-1,k])/dx :
 							 (yT[i,j+1,k] - yT[i,j-1,k])/(2*dx)
 
-					dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
+					@views dyTdz0 = k == 1 ? (yT[i,j,k+1] - yT[i,j,k])/dx :
 							 k == zlen ? (yT[i,j,k] - yT[i,j,k-1])/dx :
 							 (yT[i,j,k+1] - yT[i,j,k-1])/(2*dx)
 
-					dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
+					@views dzTdx0 = i == 1 ? (zT[i+1,j,k] - zT[i,j,k])/dx :
 							 i == xlen ? (zT[i,j,k] - zT[i-1,j,k])/dx :
 							 (zT[i+1,j,k] - zT[i-1,j,k])/(2*dx)
 
-					dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
+					@views dzTdy0 = j == 1 ? (zT[i,j+1,k] - zT[i,j,k])/dx :
 							 j == ylen ? (zT[i,j,k] - zT[i,j-1,k])/dx :
 							 (zT[i,j+1,k] - zT[i,j-1,k])/(2*dx)
 
-					dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
+					@views dzTdz0 = k == 1 ? (zT[i,j,k+1] - zT[i,j,k])/dx :
 							 k == zlen ? (zT[i,j,k] - zT[i,j,k-1])/dx :
 							 (zT[i,j,k+1] - zT[i,j,k-1])/(2*dx)
                     D[1,1] = dxTdx0
@@ -208,12 +212,12 @@ function main()
                     D[3,1] = dzTdx0
                     D[3,2] = dzTdy0
                     D[3,3] = dzTdz0
-                    solbac[i,j,k] = abs(1/Tin) * maximum(eigvals(D'*D))
+                    solbac[i,j,k] = abs(1/Tin) * log(sqrt(maximum(eigvals(D'*D))))
                 end
             end
         end
-        @views solbacmin = minimum(solbac)
-        @views solbacmax = maximum(solbac)
+        solbacmin = minimum(solbac)
+        solbacmax = maximum(solbac)
         solbac .-= solbacmin 
         solbac ./= solbacmax - solbacmin 
         save(folder*"FTLE_$(m).jld2", Dict("forward_LCS" => solfor, "backward_LCS" => solbac))
