@@ -17,16 +17,37 @@ pgfplotsx()
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function radial_averaging(mask_files, files, images_folder, first_index, end_index, bin_interval, intensity_thresholds, displacements_folder)
-    first_image = TiffImages.load("$images_folder/$(files[first_index])")
-    first_mask = zeros(Bool, size(first_image))
-    mask_image!(intensity_thresholds, first_mask, first_image)
+function mask_dispersal_images(downsampled)
+    mask = zeros(Bool, size(downsampled))
+    for i in 1:size(downsampled, 3)
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .< find_threshold(downsampled[:,:,i,:], Otsu()) 
+    end
+    return mask
+end
+
+function gaussian_downsample(image_files, first_index, end_index)
+    downsampled = Array{Float32, 3}(undef, 0, 0, 0, end_indx-first_index+1)
+    first_img_dummy = TiffImages.load("$images_folder/$(files[first_index])")
+    first_img_resized = imresize(first_img_dummy, ratio=(1/4, 1/4, 0.3/0.065/4))
+    height, width, depth = size(first_img_resized)
+    for i in first_index:end_index
+        img = TiffImages.load("$images_folder/$(files[i])")
+        img_resized = imresize(img, ratio=(1/4, 1/4, 0.3/0.065/4))
+        downsampled[:, :, :, i-first_index+1] = imfilter(img_resized, Kernel.gaussian(3))
+    end
+    downsampled = diff(downsampled, dims=4)
+    return downsampled
+end
+
+function radial_averaging(mask_files, first_index, end_index, bin_interval, dispersal_mask)
+    first_mask = TiffImages.load(mask_files[first_index])
     labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
     center = centers[argmax(volumes[1:end])]
-    center = (round(Int, center[1]), round(Int, center[2]), 10)
-    center_distance = zeros(Bool, size(labels))
+    relative_center = [center[1].-1, center[2].-1, 0] ./ [c for c in size(first_mask)]
+    center = round.(Int, relative_center .* [c for c in size(dispersal_mask)]) .+ 1
+    center_distance = zeros(Bool, size(dispersal_mask))
     center_distance[center[1], center[2], center[3]] = true
     center_distance = distance_transform(feature_transform(center_distance))
     max_distance = round_up(maximum(center_distance), bin_interval)
@@ -35,13 +56,9 @@ function radial_averaging(mask_files, files, images_folder, first_index, end_ind
     ntimepoints = end_index - first_index
     data_matrix = zeros(nbins-1, ntimepoints)
     for t in 1:ntimepoints
-        image_t = Float32.(TiffImages.load("$images_folder/$(files[t+first_index])"))
-        image_tm1 = Float32.(TiffImages.load("$images_folder/$(files[t+first_index-1])"))
-        deformed_img = zeros(Float32, size(image_t))
-        mask = zeros(Bool, size(image_t))
-        deformed_mask!(image_t, image_tm1, deformed_img, mask, displacements_folder, t+first_index-1, intensity_thresholds)
+        @views curr_mask = dispersal_mask[:,:,:,t]
         for i in 1:size(data_matrix, 1) 
-            data_matrix[i, t] = mean(mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
+            data_matrix[i, t] = mean(curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
     end
     return data_matrix
@@ -66,24 +83,21 @@ function main()
     for images_folder in image_folders
         plot_filename = basename(images_folder)*"_data_intensity" 
         displacements_folder = "$(images_folder)/Displacements"
-        intensity_thresholds_file = "$(images_folder)/isotropic_intensity_thresholds.csv" 
-        files = sort([f for f in readdir(images_folder) if occursin("no_plank", f)], 
+        image_files = sort([f for f in readdir(images_folder, join=true) if occursin("noplank", f)], 
                                  lt=natural)
-        mask_files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
+        mask_files = sort([f for f in readdir(images_folder, join=true) if occursin("mask", f)], 
                                  lt=natural)
-        intensity_thresholds = readdlm(intensity_thresholds_file, ',', Float64)[1:end,1]
-        ntimepoints = length(files)
-        first_image = TiffImages.load("$images_folder/$(files[1])"; lazyio=true)
-        height, width, slices = size(first_image)
-        first_image = nothing
+        ntimepoints = length(image_files)
         net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
+        # Get first and last indices for dispersal
         first_index = argmax(net)
         end_index = min(first_index + 45, ntimepoints)
-
-        data_matrix = diff(radial_averaging(mask_files, files, images_folder, first_index, end_index, 30, intensity_thresholds, displacements_folder), dims=2)
-        data_matrix[data_matrix .> 0] .= 0
-        replace!(data_matrix, Inf=>NaN)
-        replace!(data_matrix, NaN=>0.0)
+        # Downsample the relevant images and subtract consecutive timepoints
+        downsampled = gaussian_downsample(image_files, first_index, end_index)
+        # Mask the "dispersal images"
+        dispersal_mask = mask_dispersal_images(downsampled)
+        # Radially average the result
+        data_matrix = radial_averaging(mask_files, first_index, end_index, bin_interval, dispersal_mask)
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
         n = 10
         ytick_interval = n/0.065/30
