@@ -112,6 +112,8 @@ function main()
     WT_dispersal = []
     WT_growth = []
     conditions = []
+    fig = Figure(size=(4*72, 3*72))
+    ax = Axis(fig[1, 1])
     for (j, vector_folder) in enumerate(vector_folders)
         mask_files = sort([f for f in readdir(images_folders[j], join=true) if occursin("mask_isotropic", f)], lt=natural)
         mask_t1 = load(mask_files[1])
@@ -121,24 +123,8 @@ function main()
         end_idx = min(first_idx+45, length(bulk_data))
         piv_files = sort([f for f in readdir(vector_folder, join=true) if occursin("piv", f)], lt=natural)
         dispersal_divergences = Array{Float64, 1}(undef, end_idx-first_idx+1)
-        growth_divergences = Array{Float64, 1}(undef, first_idx-1)
         dummy_u = load(piv_files[first_idx], "u")
         center_of_mass = compute_com(mask_t1, dummy_u)
-        for i in 1:first_idx-1 
-            u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
-            ui = permutedims(u, [2,1,3])
-            vi = permutedims(v, [2,1,3])
-            wi = permutedims(w, [2,1,3])
-            flags = permutedims(flags, [2,1,3])
-            ui[flags .> 0] .= NaN
-            vi[flags .> 0] .= NaN
-            wi[flags .> 0] .= NaN
-            net_divergence = calculate_radial_component(ui, vi, wi.*4, 8, 8, 8, center_of_mass)
-            growth_divergences[i] = net_divergence
-        end
-        growth_divergences = mean(growth_divergences) 
-        push!(WT_growth, growth_divergences)
-        push!(conditions, "Growth")
         for i in first_idx:end_idx 
             u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
             ui = permutedims(u, [2,1,3])
@@ -151,25 +137,18 @@ function main()
             net_divergence = calculate_radial_component(ui, vi, wi.*4, 8, 8, 8, center_of_mass)
             dispersal_divergences[i-first_idx+1] = net_divergence
         end
-        dispersal_divergences = mean(dispersal_divergences) 
-        push!(WT_dispersal, dispersal_divergences)
-        push!(conditions, "Dispersal")
+        xaxis = 1:length(dispersal_divergences)
+        xaxis /= 6
+        lines!(ax, xaxis, dispersal_divergences, color="#fbb4ae")
     end
-    data = vcat(WT_growth, WT_dispersal)
-    category_num = Int.(repeat(1:2, inner = 5))
-    fig = Figure(size=(2.5*72, 3*72))
-    ax = Axis(fig[1, 1])
-    boxplot!(ax, category_num, Float64.(data); color="#fbb4ae")
-    ax.xticks=(1:2, unique(conditions))
-    ax.xticklabelrotation=45
-    ax.xlabel=""
+    ax.xlabel= "Time (h)"
     ax.ylabel="Radial displacement \n (µm)"
     ax.title=""
     ax.rightspinevisible = false
     ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
-    save(plots_folder*"/WT_convergence.svg", fig)
+    save(plots_folder*"/WT_convergence_lines_nogrowth.svg", fig)
 end
 
 main()
