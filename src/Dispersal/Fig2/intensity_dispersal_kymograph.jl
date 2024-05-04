@@ -1,11 +1,16 @@
 using TiffImages
-using Plots
 using LaTeXStrings
+using Makie
+using GLMakie
+using CairoMakie
+CairoMakie.activate!(type = "pdf")
+set_theme!(fonts=(; bold="TeX Gyre Heros Makie"))
 using NaturalSort: sort, natural
 using StatsBase
 using ColorTypes: Gray, N0f16
 using ImageMorphology: label_components, component_lengths, component_centroids
 using Images: imresize, distance_transform, feature_transform
+using ImageFiltering
 using ImageView
 using HistogramThresholding: find_threshold, Otsu
 using FLoops
@@ -13,27 +18,26 @@ using DelimitedFiles
 using Interpolations
 using FileIO
 
-pgfplotsx()
-
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
 function mask_dispersal_images(downsampled)
     mask = zeros(Bool, size(downsampled))
     for i in 1:size(downsampled, 3)
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .< find_threshold(downsampled[:,:,i,:], Otsu()) 
+        thresh = find_threshold(downsampled[:,:,i,:], Otsu())
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .< thresh*2
     end
     return mask
 end
 
 function gaussian_downsample(image_files, first_index, end_index)
-    downsampled = Array{Float32, 3}(undef, 0, 0, 0, end_indx-first_index+1)
-    first_img_dummy = TiffImages.load("$images_folder/$(files[first_index])")
+    first_img_dummy = TiffImages.load(image_files[first_index])
     first_img_resized = imresize(first_img_dummy, ratio=(1/4, 1/4, 0.3/0.065/4))
     height, width, depth = size(first_img_resized)
+    downsampled = Array{Float32, 4}(undef, height, width, depth, end_index-first_index+1)
     for i in first_index:end_index
-        img = TiffImages.load("$images_folder/$(files[i])")
+        img = TiffImages.load(image_files[i])
         img_resized = imresize(img, ratio=(1/4, 1/4, 0.3/0.065/4))
-        downsampled[:, :, :, i-first_index+1] = imfilter(img_resized, Kernel.gaussian(3))
+        downsampled[:, :, :, i-first_index+1] = imfilter(img_resized, Kernel.gaussian((3,3,3)))
     end
     downsampled = diff(downsampled, dims=4)
     return downsampled
@@ -46,8 +50,8 @@ function radial_averaging(mask_files, first_index, end_index, bin_interval, disp
     centers = component_centroids(labels)
     center = centers[argmax(volumes[1:end])]
     relative_center = [center[1].-1, center[2].-1, 0] ./ [c for c in size(first_mask)]
-    center = round.(Int, relative_center .* [c for c in size(dispersal_mask)]) .+ 1
-    center_distance = zeros(Bool, size(dispersal_mask))
+    @views center = round.(Int, relative_center .* [c for c in size(dispersal_mask[:,:,:,1])]) .+ 1
+    @views center_distance = zeros(Bool, size(dispersal_mask[:,:,:,1]))
     center_distance[center[1], center[2], center[3]] = true
     center_distance = distance_transform(feature_transform(center_distance))
     max_distance = round_up(maximum(center_distance), bin_interval)
@@ -65,13 +69,8 @@ function radial_averaging(mask_files, first_index, end_index, bin_interval, disp
 end
 
 function main()
-    push!(PGFPlotsX.CUSTOM_PREAMBLE, "\\usepackage{sfmath}\n\\renewcommand{\\familydefault}{\\sfdefault}")
-    default(titlefont = 20, legendfontsize = 15, 
-            guidefont = (20, :black), colorbar_tickfontsize=15, colorbar_titlefontsize=20, tickfont = (15, :black), 
-            guide = L"x", linewidth=2, grid=false, formatter=:plain)
-    plot_size = (350,300)
     plot_xlabel = "Time (h)"
-    plot_ylabel = L"Distance from center ($\mu$m)"
+    plot_ylabel = "Distance from center \n (µm)"
     plot_title = "Data"
 
     master_directory = "/mnt/h/Dispersal"
@@ -97,20 +96,24 @@ function main()
         # Mask the "dispersal images"
         dispersal_mask = mask_dispersal_images(downsampled)
         # Radially average the result
-        data_matrix = radial_averaging(mask_files, first_index, end_index, bin_interval, dispersal_mask)
+        data_matrix = radial_averaging(mask_files, first_index, end_index, 2, dispersal_mask)[:,2:end] .* -1
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
-        n = 10
-        ytick_interval = n/0.065/30
+        n = 10 
+        ytick_interval = n*4/0.065/30
         xs = 0:6:size(data_matrix, 2)-1
         ys = 0:ytick_interval:size(data_matrix, 1)-1
-        c = cgrad(:Purples, rev=true)
-        plt = heatmap(data_matrix, xticks=xs, yticks=ys, color=c, clim=(-0.1, 0),
-                      colorbar_title="Density change (a.u.)", xformatter=xi -> xi*1/6, 
-                      yformatter=yi -> yi/ytick_interval*n, size=plot_size)
-        xlabel!(plt, plot_xlabel)
-        ylabel!(plt, plot_ylabel)
-        title!(plt, plot_title)
-        savefig("$plots_folder/$plot_filename"*".svg")
+        fig = Figure(size=(5*72, 3*72))
+        ax = Axis(fig[1, 1])
+        hm = heatmap!(ax, transpose(data_matrix), colormap=Reverse(:Purples))
+        Colorbar(fig[:, end+1], hm, label="Density change (a.u.)")
+        ax.xticks = xs
+        ax.yticks = ys
+        ax.xtickformat=values->[v/6 for v in values]
+        ax.ytickformat=values->[v/(ytick_interval*n) for v in values]
+        ax.xlabel = plot_xlabel
+        ax.ylabel = plot_ylabel
+        ax.title = plot_title
+        save("$plots_folder/$plot_filename"*".pdf", fig)
     end
 end
 
