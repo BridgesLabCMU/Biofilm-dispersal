@@ -20,15 +20,16 @@ using FileIO
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function mask_dispersal_images(downsampled)
-    mask = zeros(Float32, size(downsampled))
+function mask_dispersal_images(downsampled, images_folder)
+    mask = zeros(Bool, size(downsampled))
     for i in 1:size(downsampled, 3)
         thresh = find_threshold(downsampled[:,:,i,:], Otsu())
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> max(thresh*1.2, 2e-5)
     end
-    imshow(mask)
-    mask_diff = diff(mask, dims=4) .< 0
-    return mask_diff
+    for t in 1:size(mask, 4)
+        TiffImages.save(images_folder*"/downsampled_mask_$(t).tif", Gray{Bool}.(mask[:,:,:,t].>0))
+    end
+    return mask
 end
 
 function gaussian_downsample(image_files, first_index, end_index)
@@ -60,13 +61,15 @@ function radial_averaging(mask_files, first_index, end_index, bin_interval, disp
     nbins = length(bins)
     ntimepoints = end_index - first_index
     data_matrix = zeros(nbins-1, ntimepoints)
+    boundary = zeros(ntimepoints)
     for t in 1:ntimepoints
         @views curr_mask = dispersal_mask[:,:,:,t]
         for i in 1:size(data_matrix, 1) 
             data_matrix[i, t] = mean(curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
+        boundary[t] = maximum(center_distance .* curr_mask)
     end
-    return data_matrix
+    return data_matrix, boundary
 end
 
 function main()
@@ -76,7 +79,7 @@ function main()
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
-    image_folders = [f for f in image_folders if occursin("WT_replicate1", f)]
+    #image_folders = [f for f in image_folders if occursin("WT_replicate1", f)]
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
 
@@ -95,25 +98,34 @@ function main()
         # Downsample the relevant images and subtract consecutive timepoints
         downsampled = gaussian_downsample(image_files, first_index, end_index)
         # Mask the "dispersal images"
-        dispersal_mask = mask_dispersal_images(downsampled)
+        dispersal_mask = mask_dispersal_images(downsampled, images_folder)
         # Radially average the result
-        data_matrix = radial_averaging(mask_files, first_index, end_index, 2, dispersal_mask)[:,2:end] .* -1
+        data_matrix, boundary = radial_averaging(mask_files, first_index, end_index, 8, dispersal_mask)
+        data_matrix = diff(data_matrix, dims=2) .* 6
+        boundary = boundary ./ 8#[1:end-1] ./ 8
+        data_matrix[data_matrix .> 0] .= 0
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
         n = 10 
-        ytick_interval = n*4/0.065/30
+        ytick_interval = n/0.065/30
         xs = 0:6:size(data_matrix, 2)-1
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
-        hm = heatmap!(ax, transpose(data_matrix), colormap=Reverse(:Purples))
-        Colorbar(fig[:, end+1], hm, label="Density change (a.u.)")
+        hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
+                      transpose(data_matrix), colormap=:devon, padding=(0.0, 0.0))
+        lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)
+        Colorbar(fig[:, end+1], hm, label="Density change/h")
         ax.xticks = xs
         ax.yticks = ys
-        ax.xtickformat=values->[v/6 for v in values]
-        ax.ytickformat=values->[v/(ytick_interval*n) for v in values]
+        ax.xtickformat=values->string.([Int(div(v,6)) for v in values])
+        ax.ytickformat=values->string.([Int(v*n/ytick_interval) for v in values])
         ax.xlabel = plot_xlabel
         ax.ylabel = plot_ylabel
         ax.title = plot_title
+        ax.xgridvisible = false
+        ax.ygridvisible = false
+        ylims!(ax, 0, maximum(boundary)+2)
+        xlims!(ax, 0, size(data_matrix, 2)-1)
         save("$plots_folder/$plot_filename"*".pdf", fig)
     end
 end
