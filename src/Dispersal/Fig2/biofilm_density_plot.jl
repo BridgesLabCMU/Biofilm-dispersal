@@ -31,7 +31,7 @@ function radial_averaging(data_files, random_mask_path, bin_interval)
     nbins = length(bins)
     data_distribution = zeros(nbins-1)
     random_distribution = zeros(nbins-1)
-    data_configuration = TiffImages.load(files[1]) .> 0
+    data_configuration = TiffImages.load(data_files[end]) .> 0
     random_configuration = TiffImages.load(random_mask_path) .> 0
     for i in 1:length(data_distribution) 
         data_distribution[i] = mean(data_configuration[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
@@ -53,9 +53,6 @@ function main()
     data = []
     random = []
     for images_folder in image_folders
-        if isfile("$plots_folder/$plot_filename"*".pdf")
-            continue
-        end
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
         random_mask_path = images_folder*"/random_mask_final.tif"
@@ -64,20 +61,21 @@ function main()
         push!(random, random_distribution)
     end
 
-    data_mean = [mean([x[i] for x in data]) for i in 1:length(data[1])]
-    random_mean = [mean([x[i] for x in random]) for i in 1:length(random[1])]
-    n = 10 
+    data_mean = [mean([x[i] for x in data]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    random_mean = [mean([x[i] for x in random]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    n = 5 
     xtick_interval = n/0.065/30
     xs = 0:xtick_interval:length(data_mean)-1
-    fig = Figure(size=(3*72, 3*72))
+    fig = Figure(size=(6*72, 3*72))
     ax = Axis(fig[1, 1])
     lines!(ax, 0:length(data_mean)-1, data_mean, label="Data")
-    lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model")
+    lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model",color=Makie.wong_colors()[4])
     ax.xticks = xs
-    ax.xtickformat=values->string.([Int(v*n/xtick_interval) for v in values])
+    ax.xtickformat=values->string.([round(Int, v*n/xtick_interval) for v in values])
     ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel
-    ax.title = plot_title
+    ax.rightspinevisible = false
+    ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
     fig[1,2] = Legend(fig, ax, framevisible=false, labelsize=12, rowgap=0)
