@@ -20,33 +20,8 @@ using FileIO
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function mask_dispersal_images(downsampled, images_folder)
-    mask = zeros(Bool, size(downsampled))
-    for i in 1:size(downsampled, 3)
-        thresh = find_threshold(downsampled[:,:,i,:], Otsu())
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> max(thresh*1.2, 2e-5)
-    end
-    for t in 1:size(mask, 4)
-        TiffImages.save(images_folder*"/downsampled_mask_$(t).tif", Gray{Bool}.(mask[:,:,:,t].>0))
-    end
-    return mask
-end
-
-function gaussian_downsample(image_files, first_index, end_index)
-    first_img_dummy = TiffImages.load(image_files[first_index])
-    first_img_resized = imresize(first_img_dummy, ratio=(1/4, 1/4, 0.3/0.065/4))
-    height, width, depth = size(first_img_resized)
-    downsampled = Array{Float32, 4}(undef, height, width, depth, end_index-first_index+1)
-    for i in first_index:end_index
-        img = TiffImages.load(image_files[i])
-        img_resized = imresize(img, ratio=(1/4, 1/4, 0.3/0.065/4))
-        downsampled[:, :, :, i-first_index+1] = imfilter(img_resized, Kernel.gaussian((3,3,3)))
-    end
-    return downsampled
-end
-
-function radial_averaging(mask_files, first_index, end_index, bin_interval, dispersal_mask)
-    first_mask = TiffImages.load(mask_files[first_index])
+function radial_averaging(mask_files, data_mask, random_mask, bin_interval)
+    first_mask = TiffImages.load(mask_files[1])
     labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
@@ -79,7 +54,7 @@ function main()
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
-    #image_folders = [f for f in image_folders if occursin("WT_replicate1", f)]
+    image_folders = [f for f in image_folders if occursin("WT", f)]
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
 
