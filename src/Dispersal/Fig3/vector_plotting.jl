@@ -3,7 +3,7 @@ using Makie
 using GLMakie
 using CairoMakie
 CairoMakie.activate!(type = "pdf")
-set_theme!(fonts = (; regular = "Comic Sans", bold = "TeX Gyre Heros Regular"))
+set_theme!(fonts = (; regular = "TeX Gyre Heros Regular", bold = "TeX Gyre Heros Regular"))
 using NaturalSort
 using StatsBase
 using NaNStatistics

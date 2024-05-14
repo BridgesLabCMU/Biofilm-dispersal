@@ -77,6 +77,7 @@ function main()
     ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
+    ylims!(ax, 0, nothing)
     save(plots_folder*"/WT_cheY_lapG_rbmB_bulk.svg", fig)
 end
 

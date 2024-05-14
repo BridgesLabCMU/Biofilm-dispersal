@@ -14,9 +14,9 @@ end
 
 function main()
     # Load in the data
-    folder = "/mnt/h/Dispersal/WT_replicate1_processed/Displacements/" 
+    folder = "/mnt/h/Dispersal/WT_replicate3_processed/Displacements/" 
     images_folder = dirname(dirname(folder))
-    images = sort([f for f in readdir(images_folder, join=true) if occursin("isotropic.tif", f) && occursin("no_plank", f)], 
+    images = sort([f for f in readdir(images_folder, join=true) if occursin("isotropic", f) && occursin("tif", f)], 
                   lt=natural)
     img_size = size(TiffImages.load(images[1]; lazyio=true))
     files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
