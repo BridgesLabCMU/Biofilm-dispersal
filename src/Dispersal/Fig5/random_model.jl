@@ -26,19 +26,6 @@ function load_images(image_files, first_index, end_index)
     return images
 end
 
-function N_smallest(M, center_distance, biofilm_configuration, n)
-    M[center_distance .== 0] .= biofilm_configuration[center_distance .== 0]  
-    v = vec(M)
-    nonzero_indices = findall(x -> x != 0, v)
-    n = min(n, length(nonzero_indices))
-    if n == 0
-        return CartesianIndex[]
-    end
-    perm = partialsortperm(v[nonzero_indices], 1:n)
-    indices = CartesianIndices(M)[nonzero_indices[perm]]
-    return indices
-end
-
 function radial_averaging(files, first_index, end_index, bin_interval, masks)
     first_image = TiffImages.load(files[first_index])
     labels = label_components(first_image)
@@ -71,14 +58,9 @@ function radial_averaging(files, first_index, end_index, bin_interval, masks)
     for t in 1:ntimepoints-1
         biofilm_configuration = masks[:,:,:,t]
         dispersal_config .= 0 
-        N_voxels = N_smallest(biofilm_configuration .* center_distance, center_distance, 
-                              biofilm_configuration, budget[t])
-        boundary[t] = maximum(center_distance .* (biofilm_configuration .> 0))
-        if N_voxels == CartesianIndex[]
-            for i in 1:size(data_matrix, 1) 
-                data_matrix[i, t] = 0 
-            end
-        else
+        if budget[t] <= sum(biofilm_configuration)
+            N_voxels = sample(findall(!iszero, biofilm_configuration), budget[t], replace=false)
+            boundary[t] = maximum(center_distance .* (biofilm_configuration .> 0))
             dispersal_config[N_voxels] .= 1 
             for i in 1:size(data_matrix, 1) 
                 data_matrix[i, t] = -1*mean(dispersal_config[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
@@ -99,7 +81,7 @@ end
 function main()
     plot_xlabel = "Time (h)"
     plot_ylabel = "Distance from center \n (µm)"
-    plot_title = "Inside-out model"
+    plot_title = "Random model"
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
@@ -109,7 +91,7 @@ function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
-        plot_filename = basename(images_folder)*"_in_out_net_downsampled" 
+        plot_filename = basename(images_folder)*"_random_net_downsampled" 
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
         all_files = sort([f for f in readdir(images_folder, join=true) if occursin("stack", f)], 
