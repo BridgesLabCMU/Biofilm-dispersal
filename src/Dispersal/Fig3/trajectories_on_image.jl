@@ -49,35 +49,38 @@ function main()
     v_growth = v_growth[1:grid_interval:end, 1:grid_interval:end, 1:grid_interval:end]
     w_growth = w_growth[1:grid_interval:end, 1:grid_interval:end, 1:grid_interval:end]
 
-    #u_growth = mapwindow(maximum, u_growth, (1,1,3))
-    #v_growth = mapwindow(maximum, v_growth, (1,1,3))
-    #w_growth = mapwindow(maximum, w_growth, (1,1,3))
+    u_growth = mapwindow(median, u_growth, (3,3,1))
+    v_growth = mapwindow(median, v_growth, (3,3,1))
+    w_growth = mapwindow(median, w_growth, (3,3,1))
     
     distance = sqrt.(u_growth.^2 .+ v_growth.^2 .+ w_growth.^2)
 
-    thresh=1
-
+    thresh=15
     u_growth[distance .< thresh] .= NaN
     v_growth[distance .< thresh] .= NaN
     w_growth[distance .< thresh] .= NaN
     
+    #fig = Figure(size=(400*0.01,size(image,1)/size(image,2)*400*0.01))
     fig = Figure()
     ax = CairoMakie.Axis(fig[1,1])
-    
     image_slice = 15 
     slice = round(Int, image_slice/size(image,3)*size(u_growth, 3))
     hm = heatmap!(ax, Int.(1:size(image, 2)).-1, Int.(size(image,1):-1:1).-1, Float32.(transpose(image[:,:,image_slice])), colormap=:grays)
-    ar = arrows!(ax, (x.-1), (y.-1), u_growth[:,:,slice], v_growth[:,:,slice], arrowsize=4, arrowcolor=:red, linecolor=:red)
+    ar = arrows!(ax, (x.-1), (y.-1), u_growth[:,:,slice], v_growth[:,:,slice], arrowsize=6, arrowcolor=:salmon, linecolor=:salmon)
     ax.title = ""
     ax.xticksvisible=false
     ax.yticksvisible=false
     ax.xticklabelsvisible=false
     ax.yticklabelsvisible=false
     ax.rightspinevisible = false
+    ax.leftspinevisible = false
     ax.topspinevisible = false
+    ax.bottomspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
-    fig
-    #save(plots_folder*"/image_channel.pdf", fig)
+    hlines!(ax, round(Int, size(image[:,:,image_slice],2)*1/20),xmin=(round(Int, size(image[:,:,image_slice],1)*39/40) - 10/0.065)/size(image[:,:,image_slice],1),  xmax=round(Int, size(image[:,:,image_slice],1)*39/40)/size(image[:,:,image_slice],1), linewidth=10, color = :white)
+    linecenter = round(Int, size(image[:,:,image_slice],1))*37/40  
+    text!(ax, linecenter, round(Int, size(image[:,:,image_slice],2)*1/20)+50, text = "10 µm", align = (:left, :center), fontsize=35, color=:white)
+    save(plots_folder*"/image_channel.png", fig)
 end
 main()

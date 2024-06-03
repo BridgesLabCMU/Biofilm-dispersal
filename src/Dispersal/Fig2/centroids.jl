@@ -3,6 +3,7 @@ using GLMakie
 using CairoMakie
 CairoMakie.activate!(type = "pdf")
 set_theme!(fonts=(; bold="TeX Gyre Heros Makie"))
+using SwarmMakie
 using LaTeXStrings
 using TiffImages
 using NaturalSort: sort, natural
@@ -125,12 +126,16 @@ function main()
         push!(random_integrals, random_integral)
     end
     boxplot_data = vcat(in_out_integrals, out_in_integrals, random_integrals)
+    averages = [mean(in_out_integrals), mean(out_in_integrals), mean(random_integrals)]
+    maxes = [maximum(in_out_integrals), maximum(out_in_integrals), maximum(random_integrals)]
+    mins = [minimum(in_out_integrals), minimum(out_in_integrals), minimum(random_integrals)]
     fig = Figure(size=(3*72, 3*72))
     ax = Axis(fig[1, 1])
     category_num = Int.(repeat(1:3, inner=5))
-    boxplot!(ax, Int.(repeat([1], inner=5)), Float64.(in_out_integrals), showoutliers=true, color=Makie.wong_colors()[2])
-    boxplot!(ax, Int.(repeat([2], inner=5)), Float64.(out_in_integrals), showoutliers=true, color=Makie.wong_colors()[3])
-    boxplot!(ax, Int.(repeat([3], inner=5)), Float64.(random_integrals), showoutliers=true, color=Makie.wong_colors()[4])
+    category_num_crossbar = Int.(1:3)
+    crossbar!(ax, category_num_crossbar, averages, mins, maxes, color=:white, midlinecolor=Makie.wong_colors()[2:4])
+    plt = beeswarm!(ax, category_num, Float64.(boxplot_data), color=category_num, algorithm=UniformJitter(), strokewidth=1)
+    plt.colormap[] = Makie.wong_colors()[2:4]
     ax.xticks = (1:3, string.(["Inside-out", "Outside-in", "Random"]))
     ax.xticklabelrotation = 45
     ax.xlabel = ""

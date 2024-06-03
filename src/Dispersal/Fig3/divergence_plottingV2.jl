@@ -59,36 +59,6 @@ function compute_com(mask, vector_field)
 	return center_of_mass_vectors
 end
 
-function calculate_divergence(u, v, w, dx, dy, dz)
-    nx, ny, nz = size(u)
-    net_divergence = 0.0
-    for k in 1:nz
-        for j in 1:ny
-            for i in 1:nx
-                if !isnan(u[i,j,k])
-                    dudx = (i==nx && !isnan(u[i-1,j,k])) ? (u[i,j,k]-u[i-1,j,k])/dx : (i==1 && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i,j,k])/dx : (i!=nx && i!=1 && !isnan(u[i-1,j,k]) && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i-1,j,k])/(2dx) : NaN 
-				else
-                    dudx = NaN 
-                end
-                if !isnan(v[i,j,k])
-                    dvdy = (j==ny && !isnan(v[i,j-1,k])) ? (v[i,j,k]-v[i,j-1,k])/dx : (j==1 && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j,k])/dx : (j!=ny && j!=1 && !isnan(v[i,j-1,k]) && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j-1,k])/(2dx) : NaN 
-                else
-                    dvdy = NaN 
-                end
-                if !isnan(w[i,j,k])
-                    dwdz = (k==nz && !isnan(w[i,j,k-1])) ? (w[i,j,k]-w[i,j,k-1])/dx : (k==1 && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k])/dx : (k!=nz && k!=1 && !isnan(w[i,j,k-1]) && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k-1])/(2dx) : NaN 
-                else
-                    dwdz = NaN 
-                end
-                if !isnan(dudx + dvdy + dwdz)
-                    net_divergence += dudx + dvdy + dwdz
-                end
-            end
-        end
-    end
-    return net_divergence
-end
-
 function main()
     conditions = ["Wild-type", L"$\Delta cheY$",L"$\Delta lapG$",L"$\Delta rbmB$"]
     images_folder = "/mnt/h/Dispersal/WT_replicate1_processed/"
@@ -157,22 +127,25 @@ function main()
         first_idx = argmax(bulk_data)
         end_idx = min(first_idx+45, length(bulk_data))
         piv_files = sort([f for f in readdir(vector_folder, join=true) if occursin("piv", f)], lt=natural)
-        divergences = Array{Float64, 1}(undef, end_idx-first_idx+1)
         dummy_u = load(piv_files[first_idx], "u")
         center_of_mass = compute_com(mask_t1, dummy_u)
+        height, width, depth = size(dummy_u)
+        u_tot = zeros(Float32, width, height, depth)
+        v_tot = zeros(Float32, width, height, depth)
+        w_tot = zeros(Float32, width, height, depth) 
         for i in first_idx:end_idx 
             u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
+            u[flags .> 0] .= 0
+            v[flags .> 0] .= 0
+            w[flags .> 0] .= 0
             ui = permutedims(u, [2,1,3])
             vi = permutedims(v, [2,1,3])
             wi = permutedims(w, [2,1,3])
-            flags = permutedims(flags, [2,1,3])
-            ui[flags .> 0] .= 0
-            vi[flags .> 0] .= 0
-            wi[flags .> 0] .= 0
-            net_divergence = calculate_radial_component(ui, vi, wi.*4, dx, dy, dz, center_of_mass)
-            divergences[i-first_idx+1] = net_divergence
+            u_tot = u_tot + ui
+            v_tot = v_tot + vi
+            w_tot = w_tot + wi
         end
-        divergences = mean(divergences) 
+        divergences = calculate_radial_component(u_tot, v_tot, w_tot.*4, dx, dy, dz, center_of_mass)
         lab = choose_label(vector_folder)
         if lab == "WT"
             push!(WT_averages, divergences)

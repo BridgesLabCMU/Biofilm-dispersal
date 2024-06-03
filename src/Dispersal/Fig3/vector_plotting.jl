@@ -1,4 +1,5 @@
 using FileIO 
+using Images
 using Makie 
 using GLMakie
 using CairoMakie
@@ -103,9 +104,9 @@ function main()
         w_growth += permutedims(w, (2,1,3))
         flags_tot += permutedims(flags, (2,1,3))
     end
-    u_growth[flags_tot .> 0] .= NaN 
-    v_growth[flags_tot .> 0] .= NaN  
-    w_growth[flags_tot .> 0] .= NaN
+    u_growth[flags_tot .> 3] .= NaN 
+    v_growth[flags_tot .> 3] .= NaN  
+    w_growth[flags_tot .> 3] .= NaN
     
     for i in 9:length(files)
         u, v, w, flags = load(files[i], "u", "v", "w", "flags")
@@ -115,11 +116,11 @@ function main()
         u_dispersal += permutedims(u, (2,1,3))
         v_dispersal += permutedims(v, (2,1,3)) 
         w_dispersal += permutedims(w, (2,1,3))
-        flags_tot += permutedims(flags, (2,1,3))
+        #flags_tot += permutedims(flags, (2,1,3))
     end
-    u_dispersal[flags_tot .> 0] .= NaN 
-    v_dispersal[flags_tot .> 0] .= NaN  
-    w_dispersal[flags_tot .> 0] .= NaN
+    u_dispersal[flags_tot .> 3] .= NaN 
+    v_dispersal[flags_tot .> 3] .= NaN  
+    w_dispersal[flags_tot .> 3] .= NaN
 
     u_growth = u_growth[1:2:end, 1:2:end, 1:2:end] .* 0.065
     v_growth = v_growth[1:2:end, 1:2:end, 1:2:end] .* 0.065
@@ -127,6 +128,14 @@ function main()
     u_dispersal = u_dispersal[1:2:end, 1:2:end, 1:2:end] .* 0.065
     v_dispersal = v_dispersal[1:2:end, 1:2:end, 1:2:end] .* 0.065
     w_dispersal = w_dispersal[1:2:end, 1:2:end, 1:2:end] .* 0.065
+
+    u_growth = mapwindow(median, u_growth, (3,1,1))
+    v_growth = mapwindow(median, v_growth, (3,1,1))
+    w_growth = mapwindow(median, w_growth, (3,1,1))
+    u_dispersal = mapwindow(median, u_dispersal, (3,1,1))
+    v_dispersal = mapwindow(median, v_dispersal, (3,1,1))
+    w_dispersal = mapwindow(median, w_dispersal, (3,1,1))
+
 
     center_of_mass, com_images = compute_com(mask_t1, u_growth)
 
@@ -136,11 +145,11 @@ function main()
     fig = Figure(size=(7*72,3*72))
     plot_xlabel = "x (µm)"
     plot_ylabel = "z (µm)"
-    ax = Axis(fig[1,1])
-    ax2 = Axis(fig[1,2])
-    ar = arrows!(ax, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_growth[:,15,:], w_growth[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_growth[:,15,:]), linecolor=vec(radial_component_growth[:,15,:]),colorrange=(nanminimum(radial_component_dispersal[:,15,:]), nanmaximum(radial_component_growth[:,15,:])), colormap=:berlin)
-    ar2 = arrows!(ax2, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_dispersal[:,15,:], w_dispersal[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_dispersal[:,15,:]), linecolor=vec(radial_component_dispersal[:,15,:]),colorrange=(nanminimum(radial_component_dispersal[:,15,:]), nanmaximum(radial_component_growth[:,15,:])), colormap=:berlin)
-    Colorbar(fig[:, end+1], limits=(nanminimum(radial_component_dispersal[:,15,:]), nanmaximum(radial_component_growth[:,15,:])), label="Radial displacement \n (µm)", colormap=:berlin)
+    ax = CairoMakie.Axis(fig[1,1])
+    ax2 = CairoMakie.Axis(fig[1,2])
+    ar = arrows!(ax, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_growth[:,15,:], w_growth[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_growth[:,15,:]), linecolor=vec(radial_component_growth[:,15,:]),colorrange=(-2,1), colormap=:berlin)
+    ar2 = arrows!(ax2, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_dispersal[:,15,:], w_dispersal[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_dispersal[:,15,:]), linecolor=vec(radial_component_dispersal[:,15,:]),colorrange=(-2,1), colormap=:berlin)
+    Colorbar(fig[:, end+1], limits=(-2,1), label="Radial displacement \n (µm)", colormap=:berlin)
 	ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel
     ax.title = ""
@@ -157,6 +166,8 @@ function main()
     ax2.ygridvisible = false
     ax.title = "Growth"
     ax2.title = "Dispersal"
+    ylims!(ax, 0, nothing)
+    ylims!(ax2, 0, nothing)
     save(plots_folder*"/vector_example.pdf", fig)
 end
 main()

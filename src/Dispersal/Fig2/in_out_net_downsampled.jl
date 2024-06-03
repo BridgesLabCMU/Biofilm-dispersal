@@ -74,6 +74,14 @@ function radial_averaging(files, first_index, end_index, bin_interval, budget)
             end
         end
     end
+    found_zero = false
+    for i in eachindex(boundary)
+        if found_zero
+            boundary[i] = 0 
+        elseif boundary[i] == 0 
+            found_zero = true
+        end
+	end
     return data_matrix, boundary
 end
 
@@ -84,23 +92,31 @@ function main()
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
-    image_folders = [f for f in image_folders if occursin("WT", f)]
+    image_folders = [f for f in image_folders if !occursin("Plots", f)]
+    image_folders = [f for f in image_folders if occursin("rbmA", f)]
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
         plot_filename = basename(images_folder)*"_in_out_net_downsampled" 
-        if isfile("$plots_folder/$plot_filename"*".pdf")
-            continue
-        end
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
         all_files = sort([f for f in readdir(images_folder, join=true) if occursin("stack", f)], 
                                  lt=natural)
         ntimepoints = length(all_files)
-        net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
-        first_index = argmax(net)
-        end_index = min(first_index + 45, ntimepoints)
+        if occursin("rbmA", images_folder)
+            net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1] .+ 0.01
+            data_max = maximum(net)
+            fc = net ./ data_max
+            min_fc = minimum(fc)
+            fc = fc .- min_fc
+            end_index = findfirst(x->x<0.001, fc) 
+            first_index = end_index - 45 
+        else
+            net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
+            first_index = argmax(net)
+            end_index = min(first_index + 45, ntimepoints)
+        end
         masks = load_images(files, first_index, end_index)
         @views budget = diff(sum(masks, dims=(1,2,3))[1,1,1,:]) .* -1
         pos_avg = mean(budget[budget .< 0])

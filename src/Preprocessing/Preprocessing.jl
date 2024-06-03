@@ -114,11 +114,14 @@ function rolling_ball!(timeseries, noback, slices, frames)
 end
 
 function register!(img_stack, registered_stack, nframes, center)       
-    @views reference = img_stack[:,:,:,center]
-    @floop for t in 1:nframes
+    shifts = (0.0,0.0,0.0)
+    registered_stack[:,:,:,1] = img_stack[:,:,:,1]
+    for t in 2:nframes
+        @views reference = img_stack[:,:,:,t-1]
         @views moving = img_stack[:,:,:,t]
         shift, _, _ = phase_offset(reference, moving, upsample_factor=10)
-        shift = Translation(-1*shift[1], -1*shift[2], -1*shift[3])
+        shifts = (shifts[1] + shift[1], shifts[2] + shift[2], shifts[3] + shift[3]) 
+        shift = Translation(-1*shifts[1], -1*shifts[2], -1*shifts[3])
         registered_stack[:,:,:,t] = warp(moving, shift, axes(moving), 1)
     end
     return nothing

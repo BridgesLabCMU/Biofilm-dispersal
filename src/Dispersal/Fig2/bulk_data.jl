@@ -37,52 +37,35 @@ function mask_thresholds!(timeseries, intensity_thresholds, slices, cell_thresho
     end
     return nothing 
 end
-#function main()
-#    master_directory = "/mnt/h/Dispersal"
-#    image_folders = filter(isdir, readdir(master_directory, join=true))
-#    filter!(folder->folder≠master_directory*"/Plots", image_folders)
-#    plots_folder = "/mnt/h/Dispersal/Plots"
-#    for images_folder in image_folders
-#        filename = basename(images_folder)
-#        files = sort([f for f in readdir(images_folder) if occursin("noplank", f)], 
-#                                 lt=natural)
-#        ntimepoints = length(files)
-#        dummy_image = load("$images_folder/$(files[1])"; lazyio=true)
-#        height, width, slices = size(dummy_image)
-#        timeseries = zeros(Gray{N0f16}, height, width, slices, ntimepoints)
-#        read_images!(images_folder, ntimepoints, timeseries, files)
-#        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1)) # TODO: Change to WarpedView
-#        height, width, slices, ntimepoints = size(timeseries)
-#        intensity_thresholds = zeros(slices)
-#        mask_thresholds!(timeseries, intensity_thresholds, slices, 3.0e-5)
-#        masks = zeros(Bool, height, width, slices, ntimepoints)
-#        for i in 1:slices
-#            masks[:,:,i,:] = @views timeseries[:,:,i,:] .> intensity_thresholds[i]
-#        end
-#        timeseries = nothing
-#        write_images!(masks, ntimepoints, images_folder)
-#        @views net = sum(masks, dims=(1:3))[1,1,1,:] 
-#        writedlm("$(plots_folder)/$(filename).csv", net, ",")
-#        writedlm("$(images_folder)/isotropic_intensity_thresholds.csv", intensity_thresholds, ",")
-#        masks = nothing
-#    end
-#end
 function main()
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
+    image_folders = [f for f in image_folders if occursin("rbmA", f) && occursin("replicate3", f)]
     plots_folder = "/mnt/h/Dispersal/Plots"
     for images_folder in image_folders
         filename = basename(images_folder)
-        files = sort([f for f in readdir(images_folder) if occursin("mask_isotropic", f)], 
+        files = sort([f for f in readdir(images_folder) if occursin("noplank", f)], 
                                  lt=natural)
         ntimepoints = length(files)
         dummy_image = load("$images_folder/$(files[1])"; lazyio=true)
         height, width, slices = size(dummy_image)
+        timeseries = zeros(Gray{N0f16}, height, width, slices, ntimepoints)
+        read_images!(images_folder, ntimepoints, timeseries, files)
+        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1)) # TODO: Change to WarpedView
+        height, width, slices, ntimepoints = size(timeseries)
+        intensity_thresholds = zeros(slices)
+        mask_thresholds!(timeseries, intensity_thresholds, slices, 3.0e-5)
         masks = zeros(Bool, height, width, slices, ntimepoints)
-        read_images!(images_folder, ntimepoints, masks, files)
+        for i in 1:slices
+            masks[:,:,i,:] = @views timeseries[:,:,i,:] .> intensity_thresholds[i]
+        end
+        timeseries = nothing
+        write_images!(masks, ntimepoints, images_folder)
         @views net = sum(masks, dims=(1:3))[1,1,1,:] 
         writedlm("$(plots_folder)/$(filename).csv", net, ",")
+        writedlm("$(images_folder)/isotropic_intensity_thresholds.csv", intensity_thresholds, ",")
+        masks = nothing
     end
 end
 

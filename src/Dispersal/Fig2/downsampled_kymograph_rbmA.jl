@@ -20,17 +20,17 @@ using FileIO
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function mask_dispersal_images(downsampled)
+function mask_dispersal_images(downsampled, images_folder)
     mask = zeros(Bool, size(downsampled))
     for i in 1:size(downsampled, 3)
         thresh = find_threshold(downsampled[:,:,i,:], Otsu())
         thresh = max(thresh, 1e-9)
         @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh*2
     end
-    return mask
     for i in 1:size(downsampled, 4)
         TiffImages.save(images_folder*"/downsampled_mask_$(i).tif", Gray.(mask[:,:,:,i]))
     end
+    return mask
 end
 
 function gaussian_downsample(image_files, first_index, end_index)
@@ -70,6 +70,14 @@ function radial_averaging(mask_files, first_index, end_index, bin_interval, disp
         end
         boundary[t] = maximum(center_distance .* curr_mask)
     end
+    found_zero = false
+    for i in eachindex(boundary)
+        if found_zero
+            boundary[i] = 0 
+        elseif boundary[i] == 0 
+            found_zero = true
+        end
+	end
     return data_matrix, boundary
 end
 
@@ -92,10 +100,13 @@ function main()
         mask_files = sort([f for f in readdir(images_folder, join=true) if occursin("mask", f)], 
                                  lt=natural)
         ntimepoints = length(image_files)
-        net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
-        # Get first and last indices for dispersal
-        first_index = argmax(net)
-        end_index = min(first_index + 45, ntimepoints)
+        net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1] .+ 0.01
+        data_max = maximum(net)
+        fc = net ./ data_max
+        min_fc = minimum(fc)
+        fc = fc .- min_fc
+        end_index = findfirst(x->x<0.001, fc) 
+        first_index = end_index - 45 
         # Downsample the relevant images and subtract consecutive timepoints
         downsampled = gaussian_downsample(image_files, first_index, end_index)
         # Mask the "dispersal images"

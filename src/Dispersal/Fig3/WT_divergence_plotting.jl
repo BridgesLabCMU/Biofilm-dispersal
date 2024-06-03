@@ -2,6 +2,7 @@ using Makie
 using GLMakie
 using CairoMakie
 CairoMakie.activate!(type = "svg")
+using SwarmMakie
 using LaTeXStrings
 using StatsBase
 using DelimitedFiles
@@ -156,10 +157,16 @@ function main()
         push!(conditions, "Dispersal")
     end
     data = vcat(WT_growth, WT_dispersal)
-    category_num = Int.(repeat(1:2, inner = 5))
+    averages = [mean(data[1:5]), mean(data[6:10])]
+    maxes = [maximum(data[1:5]), maximum(data[6:10])]
+    mins = [minimum(data[1:5]), minimum(data[6:10])]
+    category_num = Int.(1:2)
+    category_num_swarm = Int.(repeat(1:2, inner = 5))
     fig = Figure(size=(2.5*72, 3*72))
-    ax = Axis(fig[1, 1])
-    boxplot!(ax, category_num, Float64.(data); color="#fbb4ae")
+    ax = CairoMakie.Axis(fig[1, 1])
+	crossbar!(ax, category_num, averages, mins, maxes; 
+			  color=:white, midlinecolor=color="#fbb4ae")
+    plt = beeswarm!(ax, category_num_swarm, Float64.(data), color="#fbb4ae", algorithm=UniformJitter(), strokewidth=1)
     ax.xticks=(1:2, unique(conditions))
     ax.xticklabelrotation=45
     ax.xlabel=""
