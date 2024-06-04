@@ -56,7 +56,7 @@ end
 
 function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
-    plot_filenames = ["cheY_centroids", "lapG_centroids", "rbmB_centroids", "rbmA_centroids"]
+    plot_filenames = ["cheY_centroids", "lapG_centroids", "rbmB_centroids"]
     for plot_filename in plot_filenames
         data_all = []
         in_out_all = []

@@ -16,8 +16,10 @@ using DelimitedFiles
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function radial_averaging(data_files, random_mask_path, bin_interval)
-    first_image = TiffImages.load(data_files[1])
+
+
+function radial_averaging(data_files, bin_interval)
+    first_image = TiffImages.load(data_files[1]) .> 0
     labels = label_components(first_image)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
@@ -32,7 +34,9 @@ function radial_averaging(data_files, random_mask_path, bin_interval)
     data_distribution = zeros(nbins-1)
     random_distribution = zeros(nbins-1)
     data_configuration = TiffImages.load(data_files[end]) .> 0
-    random_configuration = TiffImages.load(random_mask_path) .> 0
+    N_voxels = sample(findall(!iszero, first_image), sum(first_image) - sum(data_configuration), replace=false)
+    random_configuration = copy(first_image)
+    random_configuration[N_voxels] .= 0
     for i in 1:length(data_distribution) 
         data_distribution[i] = mean(data_configuration[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         random_distribution[i] = mean(random_configuration[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
@@ -55,8 +59,7 @@ function main()
     for images_folder in image_folders
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
-        random_mask_path = images_folder*"/random_mask_final.tif"
-        data_distribution, random_distribution = radial_averaging(files, random_mask_path, 8)
+        data_distribution, random_distribution = radial_averaging(files, 8)
         push!(data, data_distribution)
         push!(random, random_distribution)
     end
@@ -68,8 +71,8 @@ function main()
     xs = 0:xtick_interval:length(data_mean)-1
     fig = Figure(size=(6*72, 3*72))
     ax = Axis(fig[1, 1])
-    lines!(ax, 0:length(data_mean)-1, data_mean, label="Data")
-    lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model",color=Makie.wong_colors()[4])
+    lines!(ax, 0:length(data_mean)-1, data_mean, label="Data", linewidth=2)
+    lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model",color=Makie.wong_colors()[4], linewidth=2)
     ax.xticks = xs
     ax.xtickformat=values->string.([round(Int, v*n/xtick_interval) for v in values])
     ax.xlabel = plot_xlabel

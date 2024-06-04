@@ -20,12 +20,12 @@ using FileIO
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-function mask_dispersal_images(downsampled)
+function mask_dispersal_images(downsampled, images_folder)
     mask = zeros(Bool, size(downsampled))
     for i in 1:size(downsampled, 3)
         thresh = find_threshold(downsampled[:,:,i,:], Otsu())
         thresh = max(thresh, 1e-9)
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh*2
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh#*1.5
     end
     return mask
     for i in 1:size(downsampled, 4)

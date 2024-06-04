@@ -25,7 +25,7 @@ function mask_dispersal_images(downsampled, images_folder)
     for i in 1:size(downsampled, 3)
         thresh = find_threshold(downsampled[:,:,i,:], Otsu())
         thresh = max(thresh, 1e-9)
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh*2
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh
     end
     for i in 1:size(downsampled, 4)
         TiffImages.save(images_folder*"/downsampled_mask_$(i).tif", Gray.(mask[:,:,:,i]))
