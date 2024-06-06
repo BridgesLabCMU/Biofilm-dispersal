@@ -85,15 +85,11 @@ function main()
     dy = 8
     dz = 8
     WT_seen = false
-    cheY_seen = false
-    rbmB_seen = false
-    lapG_seen = false
+    rbmA_seen = false
     bulk_files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f)]
     logocolors = Colors.JULIA_LOGO_COLORS
     WT_averages = []
-    cheY_averages = []
-    rbmB_averages = []
-    lapG_averages = []
+    rbmA_averages = []
     conditions = []
     for (j, vector_folder) in enumerate(vector_folders)
         mask_files = sort([f for f in readdir(images_folders[j], join=true) if occursin("mask_isotropic", f)], lt=natural)
@@ -104,15 +100,18 @@ function main()
             first_idx = argmax(bulk_data)
             end_idx = min(first_idx+45, length(bulk_data))
         elseif occursin("rbmA", vector_folder)
-            bulk_data = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1] .+ 0.01
+            bulk_data = readdlm(bulk_file, ',', Int)[1:end,1] .+ 0.01
             data_max = maximum(bulk_data)
             fc = bulk_data ./ data_max
             min_fc = minimum(fc)
             fc = fc .- min_fc
             end_idx = findfirst(x->x<0.001, fc) 
-            first_idx = end_index - 45 
+            first_idx = 6 #end_idx - 45 
         end
         piv_files = sort([f for f in readdir(vector_folder, join=true) if occursin("piv", f)], lt=natural)
+        if end_idx > length(piv_files)
+            end_idx = length(piv_files)  
+        end
         dummy_u = load(piv_files[first_idx], "u")
         center_of_mass = compute_com(mask_t1, dummy_u)
         height, width, depth = size(dummy_u)
