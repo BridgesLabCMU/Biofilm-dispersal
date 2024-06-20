@@ -46,15 +46,14 @@ function gaussian_downsample(image_files, first_index, end_index)
     return downsampled
 end
 
-function radial_averaging(mask_files, first_index, end_index, bin_interval, dispersal_mask)
-    first_mask = TiffImages.load(mask_files[1])
+function radial_averaging(first_index, end_index, bin_interval, dispersal_mask)
+    first_mask = dispersal_mask[:,:,:,1] 
     labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
     center = centers[argmax(volumes[1:end])]
-    relative_center = [center[1].-1, center[2].-1, 0] ./ [c for c in size(first_mask)]
-    @views center = round.(Int, relative_center .* [c for c in size(dispersal_mask[:,:,:,1])]) .+ 1
-    @views center_distance = zeros(Bool, size(dispersal_mask[:,:,:,1]))
+    center = (round(Int, center[1]), round(Int, center[2]), 1)
+    center_distance = zeros(Bool, size(labels))
     center_distance[center[1], center[2], center[3]] = true
     center_distance = distance_transform(feature_transform(center_distance))
     max_distance = round_up(maximum(center_distance), bin_interval)
@@ -89,8 +88,6 @@ function main()
         displacements_folder = "$(images_folder)/Displacements"
         image_files = sort([f for f in readdir(images_folder, join=true) if occursin("noplank", f)], 
                                  lt=natural)
-        mask_files = sort([f for f in readdir(images_folder, join=true) if occursin("mask", f)], 
-                                 lt=natural)
         ntimepoints = length(image_files)
         net = readdlm(plots_folder*"/"*basename(images_folder)*".csv", ',', Int)[1:end,1]
         # Get first and last indices for dispersal
@@ -101,7 +98,7 @@ function main()
         # Mask the "dispersal images"
         dispersal_mask = mask_dispersal_images(downsampled, images_folder)
         # Radially average the result
-        data_matrix, boundary = radial_averaging(mask_files, first_index, end_index, 8, dispersal_mask)
+        data_matrix, boundary = radial_averaging(first_index, end_index, 8, dispersal_mask)
         data_matrix = diff(data_matrix, dims=2) .* 6
         boundary = boundary ./ 8#[1:end-1] ./ 8
         data_matrix[data_matrix .> 0] .= 0

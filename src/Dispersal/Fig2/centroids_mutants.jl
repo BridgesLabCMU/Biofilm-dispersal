@@ -84,24 +84,24 @@ function main()
         out_in_std = [std([x[i] for x in out_in_all]) for i in 1:length(out_in_all[1])]
         random_mean = [mean([x[i] for x in random_all]) for i in 1:length(random_all[1])]
         random_std = [std([x[i] for x in random_all]) for i in 1:length(random_all[1])]
-        n = 10 
+        n = 5 
         ytick_interval = n/0.065/30
         data = readdlm(plots_folder*"/"*plot_filename[1:4]*"_replicate5_processed_data_intensity.csv", ',')[1:end,1:end,1]
         xs = 0:6:length(data_mean)-1
         ys = 0:ytick_interval:size(data, 1)-1
         plot_ylabel = "Distance from center \n (µm)"
         plot_xlabel = "Time (h)"
-        fig = Figure(size=(5*72, 3*72))
+        fig = Figure(size=(5.5*72, 3*72))
         ax = Axis(fig[1, 1])
-        lines!(ax, 1:length(data_mean), data_mean, label="Data")
-        lines!(ax, 1:length(data_mean), in_out_mean, label="Inside-out")
-        lines!(ax, 1:length(data_mean), out_in_mean, label="Outside-in")
-        lines!(ax, 1:length(data_mean), random_mean, label="Random")
         colormap = Makie.wong_colors()
+        lines!(ax, 1:length(data_mean), data_mean, label="Data", linewidth=2)
+        #lines!(ax, 1:length(data_mean), in_out_mean, label="Inside-out")
+        #lines!(ax, 1:length(data_mean), out_in_mean, label="Outside-in")
+        lines!(ax, 1:length(data_mean), random_mean, color=4, colormap=colormap, colorrange=(1,7), label="Random", linewidth=2)
         ax.xticks = xs
         ax.yticks = ys
         ax.xtickformat=values->string.([Int(div(v,6)) for v in values])
-        ax.ytickformat=values->string.([Int(v*n/ytick_interval) for v in values])
+        ax.ytickformat=values->string.([round(Int,v*n/ytick_interval) for v in values])
         ax.xlabel = plot_xlabel
         ax.ylabel = plot_ylabel
         ax.rightspinevisible = false
@@ -109,6 +109,7 @@ function main()
         ax.xgridvisible = false
         ax.ygridvisible = false
         fig[1,2] = Legend(fig, ax, merge = true, unique = true, framevisible=false, labelsize=12, rowgap=0)
+        ylims!(ax, 0, nothing)
         save("$plots_folder/$plot_filename"*".pdf", fig)
 
         plot_filename = plot_filename*"_boxplot" 

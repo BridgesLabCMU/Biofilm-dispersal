@@ -51,7 +51,7 @@ function radial_averaging(files, first_index, end_index, bin_interval, masks)
             curr_density = curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
             next_density = next_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
             if sum(curr_density) > sum(next_density)
-                budget[t] -= sum(next_density .- curr_density)
+                budget[t] -= (sum(next_density) - sum(curr_density))
             end
         end
     end

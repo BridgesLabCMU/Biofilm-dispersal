@@ -221,7 +221,7 @@ function main()
     maxes = [maximum(data[1:5]), maximum(data[6:10]), maximum(data[11:15]), maximum(data[16:20])]
     mins = [minimum(data[1:5]), minimum(data[6:10]), minimum(data[11:15]), minimum(data[16:20])]
     category_num_swarm = Int.(repeat(1:4, inner = 5))
-    fig = Figure(size=(3*72, 3*72))
+    fig = Figure(size=(4*72, 3*72))
 	category_num = Int.(1:4)
 	category_num_swarm = Int.(repeat(1:4, inner=5))
 	ax = Axis(fig[1, 1])
