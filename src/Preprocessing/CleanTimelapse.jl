@@ -139,7 +139,6 @@ end
 function clean_timelapse(cell_threshold, file_directory, zstack_thresh)
     
     timeseries_files = [f for f in readdir(file_directory) if occursin("denoised", f) && occursin("rbmA_replicate3", f)]
-    @show timeseries_files
 
     for timeseries_file in timeseries_files
         dir = file_directory*timeseries_file[1:end-16]*"processed"

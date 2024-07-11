@@ -23,6 +23,8 @@ function choose_label(folder)
         return "lapG"
     elseif occursin("rbmB", folder)
         return "rbmB"
+    elseif occursin("rbmA", folder)
+        return "rbmA"
     end
 end
 
@@ -62,19 +64,13 @@ end
 
 function main()
     images_folders = ["/mnt/h/Dispersal/WT_replicate1_processed", "/mnt/h/Dispersal/WT_replicate2_processed", "/mnt/h/Dispersal/WT_replicate3_processed", "/mnt/h/Dispersal/WT_replicate4_processed", "/mnt/h/Dispersal/WT_replicate5_processed",
-                     "/mnt/h/Dispersal/cheY_replicate1_processed", "/mnt/h/Dispersal/cheY_replicate2_processed", "/mnt/h/Dispersal/cheY_replicate3_processed", "/mnt/h/Dispersal/cheY_replicate4_processed", "/mnt/h/Dispersal/cheY_replicate5_processed",
-                     "/mnt/h/Dispersal/lapG_replicate1_processed", "/mnt/h/Dispersal/lapG_replicate2_processed", "/mnt/h/Dispersal/lapG_replicate3_processed", "/mnt/h/Dispersal/lapG_replicate4_processed", "/mnt/h/Dispersal/lapG_replicate5_processed",
-                     "/mnt/h/Dispersal/rbmB_replicate1_processed", "/mnt/h/Dispersal/rbmB_replicate2_processed", "/mnt/h/Dispersal/rbmB_replicate3_processed", "/mnt/h/Dispersal/rbmB_replicate4_processed", "/mnt/h/Dispersal/rbmB_replicate5_processed"]
+                     "/mnt/h/Dispersal/rbmA_replicate1_processed", "/mnt/h/Dispersal/rbmA_replicate2_processed", "/mnt/h/Dispersal/rbmA_replicate3_processed", "/mnt/h/Dispersal/rbmA_replicate4_processed", "/mnt/h/Dispersal/rbmA_replicate5_processed"]
     plots_folder = "/mnt/h/Dispersal/Plots"
     WT_averages = []
-    cheY_averages = []
-    rbmB_averages = []
-    lapG_averages = []
+    rbmA_averages = []
     conditions = []
     WT_seen = false
-    cheY_seen = false
-    rbmB_seen = false
-    lapG_seen = false
+    rbmA_seen = false
     for images_folder in images_folders
         folder = images_folder*"/Displacements/"
         files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
@@ -140,52 +136,34 @@ function main()
                 WT_seen = true
                 push!(conditions, "Wild-type")
             end
-        elseif lab == "cheY"
-            push!(cheY_averages, channel_volume)
-            if cheY_seen
-                condition = ""
-            else
-                cheY_seen = true
-                push!(conditions, rich("Δ", rich("cheY"; font=:italic)))
-            end
-        elseif lab == "rbmB"
-            push!(rbmB_averages, channel_volume)
+        elseif lab == "rbmA"
+            push!(rbmA_averages, channel_volume)
             c = :coral2 
-            if rbmB_seen
+            if rbmA_seen
                 condition = ""
             else
-                rbmB_seen = true
-                push!(conditions, rich("Δ", rich("rbmB"; font=:italic)))
-            end
-        elseif lab == "lapG"
-            push!(lapG_averages, channel_volume)
-            if lapG_seen
-                condition = ""
-            else
-                lapG_seen = true
-                push!(conditions, rich("Δ", rich("lapG"; font=:italic)))
+                rbmA_seen = true
+                push!(conditions, rich("Δ", rich("rbmA"; font=:italic)))
             end
         end
     end
-    data = vcat(WT_averages, cheY_averages, lapG_averages, rbmB_averages)
-    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(cheY_averages)))
-    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(lapG_averages)))
-    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmB_averages)))
-    averages = [mean(data[1:5]), mean(data[6:10]), mean(data[11:15]), mean(data[16:20])]
-    maxes = [maximum(data[1:5]), maximum(data[6:10]), maximum(data[11:15]), maximum(data[16:20])]
-    mins = [minimum(data[1:5]), minimum(data[6:10]), minimum(data[11:15]), minimum(data[16:20])]
-    category_num_swarm = Int.(repeat(1:4, inner = 5))
-    fig = Figure(size=(4*72, 3.5*72))
-	category_num = Int.(1:4)
-	category_num_swarm = Int.(repeat(1:4, inner=5))
+    data = vcat(WT_averages, rbmA_averages)
+    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmA_averages)))
+    averages = [mean(data[1:5]), mean(data[6:10])]
+    maxes = [maximum(data[1:5]), maximum(data[6:10])]
+    mins = [minimum(data[1:5]), minimum(data[6:10])]
+    category_num_swarm = Int.(repeat(1:2, inner = 5))
+    fig = Figure(size=(3*72, 3.5*72))
+	category_num = Int.(1:2)
+	category_num_swarm = Int.(repeat(1:2, inner=5))
 	ax = CairoMakie.Axis(fig[1, 1])
-    colormap1 = [[:black]; Makie.wong_colors()[1:3]]
-    colormap2 = [[:white]; Makie.wong_colors()[1:3]]
+    colormap1 = [[:black]; Makie.wong_colors()[4]]
+    colormap2 = [[:white]; Makie.wong_colors()[4]]
 	crossbar!(ax, category_num, averages, mins, maxes; 
-			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,4))
+			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,2))
     plt = beeswarm!(ax, category_num_swarm, Float64.(data), color = category_num_swarm, algorithm=UniformJitter(), strokewidth=1)
 	plt.colormap[] = colormap2 
-    ax.xticks=(1:4, conditions)
+    ax.xticks=(1:2, conditions)
     ax.xticklabelrotation=45
     ax.xlabel=""
     ax.ylabel=rich("Channel volume fraction (a.u.)")
@@ -194,7 +172,7 @@ function main()
     ax.topspinevisible = false
     ax.xgridvisible = false
     ax.ygridvisible = false
-    ylims!(ax, 0, nothing)
-    save(plots_folder*"/channels.svg", fig)
+    ylims!(ax, 0.0, nothing)
+    save(plots_folder*"/channels_rbmA.svg", fig)
 end
 main()

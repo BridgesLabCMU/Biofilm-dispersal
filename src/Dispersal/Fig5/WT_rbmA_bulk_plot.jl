@@ -39,7 +39,7 @@ function main()
         data = data_norm
         if lab == "WT"
             color = 1 
-            colormap = :Pastel1_5
+            colormap = [[:black]; Makie.wong_colors()[4]]
             if WT_seen
                 condition = nothing 
             else
@@ -47,8 +47,8 @@ function main()
                 condition = "Wild-type"
             end
         elseif lab == "rbmA"
-            color =5 
-            colormap = :Pastel1_5
+            color = 2
+            colormap = [[:black]; Makie.wong_colors()[4]]
             if rbmA_seen
                 condition = nothing 
             else
@@ -59,7 +59,7 @@ function main()
         xs = 0:6:length(data)-1
         xaxis = 1:length(data)
         xaxis /= 6
-        lines!(ax, xaxis, data, color=color, colormap=colormap, colorrange = (1, 5), label=condition)
+        lines!(ax, xaxis, data, color=color, colormap=colormap, colorrange = (1,2), label=condition)
     end
     fig[1,2] = Legend(fig, ax, merge = true, unique = true, framevisible=false, labelsize=12, rowgap=0)
     ax.xlabel = plot_xlabel

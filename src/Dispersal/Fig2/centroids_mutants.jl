@@ -94,10 +94,10 @@ function main()
         fig = Figure(size=(5.5*72, 3*72))
         ax = Axis(fig[1, 1])
         colormap = Makie.wong_colors()
-        lines!(ax, 1:length(data_mean), data_mean, label="Data", linewidth=2)
+        lines!(ax, 1:length(data_mean), data_mean, color=:black, label="Data", linewidth=2)
         #lines!(ax, 1:length(data_mean), in_out_mean, label="Inside-out")
         #lines!(ax, 1:length(data_mean), out_in_mean, label="Outside-in")
-        lines!(ax, 1:length(data_mean), random_mean, color=4, colormap=colormap, colorrange=(1,7), label="Random", linewidth=2)
+        lines!(ax, 1:length(data_mean), random_mean, color=:black, linestyle=:dash, label="Random", linewidth=2)
         ax.xticks = xs
         ax.yticks = ys
         ax.xtickformat=values->string.([Int(div(v,6)) for v in values])

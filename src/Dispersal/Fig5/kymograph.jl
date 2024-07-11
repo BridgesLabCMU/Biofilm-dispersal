@@ -123,8 +123,10 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
+        colormap = cgrad(["#cf34eb", :white])
+        vmin = quantile(vec(data_matrix), 0.03)
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
-                      transpose(data_matrix), colormap=:devon, padding=(0.0, 0.0))
+                      transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0), colorrange=(vmin, 0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)
         Colorbar(fig[:, end+1], hm, label="Density change/h")
         ax.xticks = xs

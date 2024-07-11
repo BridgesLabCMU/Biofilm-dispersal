@@ -27,10 +27,10 @@ function mask_dispersal_images(downsampled, images_folder)
         thresh = max(thresh, 1e-9)
         @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh#*1.5
     end
-    return mask
     for i in 1:size(downsampled, 4)
         TiffImages.save(images_folder*"/downsampled_mask_$(i).tif", Gray.(mask[:,:,:,i]))
     end
+    return mask
 end
 
 function gaussian_downsample(image_files, first_index, end_index)
@@ -109,8 +109,9 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
+        colormap = cgrad(["#cf34eb", :white])#:devon
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
-                      transpose(data_matrix), colormap=:devon, padding=(0.0, 0.0))
+                      transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)
         Colorbar(fig[:, end+1], hm, label="Density change/h")
         ax.xticks = xs

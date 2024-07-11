@@ -29,7 +29,7 @@ function main()
         lab = split(basename(file), "_")[1]
         if lab == "WT"
             color = 1 
-            colormap = :Pastel1_4
+            colormap = [[:black];  Makie.wong_colors()[1:3]]
             if WT_seen
                 condition = nothing 
             else
@@ -38,7 +38,7 @@ function main()
             end
         elseif lab == "cheY"
             color = 2
-            colormap = :Pastel1_4
+            colormap = [[:black];  Makie.wong_colors()[1:3]]
             if cheY_seen
                 condition = nothing 
             else
@@ -46,8 +46,8 @@ function main()
                 condition = rich("Δ", rich("cheY"; font=:italic))
             end
         elseif lab == "rbmB"
-            color = 3
-            colormap = :Pastel1_4
+            color = 4 
+            colormap = [[:black];  Makie.wong_colors()[1:3]]
             if rbmB_seen
                 condition = nothing 
             else
@@ -55,8 +55,8 @@ function main()
                 condition = rich("Δ", rich("rbmB"; font=:italic))
             end
         elseif lab == "lapG"
-            color = 4 
-            colormap = :Pastel1_4
+            color = 3 
+            colormap = [[:black];  Makie.wong_colors()[1:3]]
             if lapG_seen
                 condition = nothing 
             else
@@ -67,7 +67,11 @@ function main()
         xs = 0:6:length(data)-1
         xaxis = 1:length(data)
         xaxis /= 6
-        lines!(ax, xaxis, data, color=color, colormap=colormap, colorrange = (1, 4), label=condition)
+        if occursin("replicate2", file) || occursin("replicate1", file)
+            lines!(ax, xaxis, data, color=:black, label=condition)
+        else
+            lines!(ax, xaxis, data, color=color, colormap=colormap, colorrange = (1, 6), label=condition)
+        end
     end
     ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel
@@ -77,7 +81,7 @@ function main()
     ax.xgridvisible = false
     ax.ygridvisible = false
     ylims!(ax, 0, nothing)
-    save(plots_folder*"/WT_bulk.svg", fig)
+    save(plots_folder*"/WT_bulk_colored.svg", fig)
 end
 
 main()

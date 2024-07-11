@@ -12,6 +12,7 @@ using FileIO
 using Makie.Colors
 using NaNStatistics
 using ImageMorphology
+using HypothesisTests
 
 function choose_label(folder)
     if occursin("WT", folder)
@@ -154,24 +155,26 @@ function main()
             end
 		end
     end
-    data = vcat(WT_averages, rbmA_averages)
+    data = vcat(WT_averages, rbmA_averages) .* 0.065
+    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmA_averages)))
     averages = [mean(data[1:5]), mean(data[6:10])]
     maxes = [maximum(data[1:5]), maximum(data[6:10])]
     mins = [minimum(data[1:5]), minimum(data[6:10])]
     category_num_swarm = Int.(repeat(1:2, inner = 5))
-    fig = Figure(size=(3*72, 3*72))
+    fig = Figure(size=(3*72, 3.5*72))
 	category_num = Int.(1:2)
 	category_num_swarm = Int.(repeat(1:2, inner=5))
 	ax = Axis(fig[1, 1])
-	colormap = [Makie.to_colormap(:Pastel1_5)[1], Makie.to_colormap(:Pastel1_5)[5]]
+    colormap1 = [[:black]; Makie.wong_colors()[4]]
+    colormap2 = [[:white]; Makie.wong_colors()[4]]
 	crossbar!(ax, category_num, averages, mins, maxes; 
-			  color=:white, midlinecolor=colormap, colormap, colorrange=(1,2))
+			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,2))
     plt = beeswarm!(ax, category_num_swarm, Float64.(data), color = category_num_swarm, algorithm=UniformJitter(), strokewidth=1)
-	plt.colormap[] = colormap 
+	plt.colormap[] = colormap2 
     ax.xticks=(1:2, conditions)
     ax.xticklabelrotation=45
     ax.xlabel=""
-    ax.ylabel="Radial displacement \n (µm)"
+    ax.ylabel="Radial displacement (µm)"
     ax.title=""
     ax.rightspinevisible = false
     ax.topspinevisible = false

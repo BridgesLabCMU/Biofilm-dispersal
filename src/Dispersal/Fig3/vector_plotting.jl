@@ -10,34 +10,6 @@ using StatsBase
 using NaNStatistics
 using ImageMorphology
 
-function calculate_divergence(u, v, w, dx, dy, dz)
-    nx, ny, nz = size(u)
-    divergence = zeros(Float32, nx, ny, nz)
-    for k in 1:nz
-        for j in 1:ny
-            for i in 1:nx
-                if !isnan(u[i,j,k])
-                    dudx = (i==nx && !isnan(u[i-1,j,k])) ? (u[i,j,k]-u[i-1,j,k])/dx : (i==1 && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i,j,k])/dx : (i!=nx && i!=1 && !isnan(u[i-1,j,k]) && !isnan(u[i+1,j,k])) ? (u[i+1,j,k]-u[i-1,j,k])/(2dx) : NaN 
-				else
-                    dudx = NaN 
-                end
-                if !isnan(v[i,j,k])
-                    dvdy = (j==ny && !isnan(v[i,j-1,k])) ? (v[i,j,k]-v[i,j-1,k])/dx : (j==1 && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j,k])/dx : (j!=ny && j!=1 && !isnan(v[i,j-1,k]) && !isnan(v[i,j+1,k])) ? (v[i,j+1,k]-v[i,j-1,k])/(2dx) : NaN 
-                else
-                    dvdy = NaN 
-                end
-                if !isnan(w[i,j,k])
-                    dwdz = (k==nz && !isnan(w[i,j,k-1])) ? (w[i,j,k]-w[i,j,k-1])/dx : (k==1 && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k])/dx : (k!=nz && k!=1 && !isnan(w[i,j,k-1]) && !isnan(w[i,j,k+1])) ? (w[i,j,k+1]-w[i,j,k-1])/(2dx) : NaN 
-                else
-                    dwdz = NaN 
-                end
-                divergence[i,j,k] = dudx + dvdy + dwdz
-            end
-        end
-    end
-    return divergence
-end
-
 function calculate_radial_component(u, v, w, dx,dy,dz, central_point)
     nx, ny, nz = size(u)
     x = reshape(1:nx, nx, 1, 1)
@@ -149,7 +121,7 @@ function main()
     ax2 = CairoMakie.Axis(fig[1,2])
     ar = arrows!(ax, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_growth[:,15,:], w_growth[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_growth[:,15,:]), linecolor=vec(radial_component_growth[:,15,:]),colorrange=(-2,1), colormap=:berlin)
     ar2 = arrows!(ax2, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_dispersal[:,15,:], w_dispersal[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_dispersal[:,15,:]), linecolor=vec(radial_component_dispersal[:,15,:]),colorrange=(-2,1), colormap=:berlin)
-    Colorbar(fig[:, end+1], limits=(-2,1), label="Radial displacement \n (µm)", colormap=:berlin)
+    Colorbar(fig[:, end+1], limits=(-2,1), label="Radial displacement (µm)", colormap=:berlin)
 	ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel
     ax.title = ""

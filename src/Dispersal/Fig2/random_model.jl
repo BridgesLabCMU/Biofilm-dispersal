@@ -26,8 +26,8 @@ function load_images(image_files, first_index, end_index)
     return images
 end
 
-function radial_averaging(files, first_index, end_index, bin_interval, masks)
-    first_image = TiffImages.load(files[1])
+function radial_averaging(first_index, end_index, bin_interval, masks)
+    first_image = masks[:,:,:,1] 
     labels = label_components(first_image)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
@@ -101,7 +101,7 @@ function main()
         first_index = argmax(net)
         end_index = min(first_index + 45, ntimepoints)
         masks = load_images(files, first_index, end_index)
-        data_matrix, boundary = radial_averaging(files, first_index, end_index, 8, masks)
+        data_matrix, boundary = radial_averaging(first_index, end_index, 8, masks)
         data_matrix .*= 6
         boundary ./= 8
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
@@ -111,8 +111,9 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
+        colormap = cgrad(["#cf34eb", :white])#:devon
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
-                      transpose(data_matrix), colormap=:devon, padding=(0.0, 0.0))
+                      transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)
         Colorbar(fig[:, end+1], hm, label="Density change/h", tickformat="{:.1f}")
         ax.xticks = xs

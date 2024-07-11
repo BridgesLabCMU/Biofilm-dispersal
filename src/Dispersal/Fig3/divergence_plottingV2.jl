@@ -12,6 +12,7 @@ using FileIO
 using Makie.Colors
 using NaNStatistics
 using ImageMorphology
+using HypothesisTests
 
 function choose_label(folder)
     if occursin("WT", folder)
@@ -95,16 +96,16 @@ function main()
                       "/mnt/h/Dispersal/cheY_replicate3_processed/", 
                       "/mnt/h/Dispersal/cheY_replicate4_processed/", 
                       "/mnt/h/Dispersal/cheY_replicate5_processed/", 
-                      "/mnt/h/Dispersal/lapG_replicate1_processed/", 
-                      "/mnt/h/Dispersal/lapG_replicate2_processed/", 
-                      "/mnt/h/Dispersal/lapG_replicate3_processed/", 
-                      "/mnt/h/Dispersal/lapG_replicate4_processed/", 
-                      "/mnt/h/Dispersal/lapG_replicate5_processed/", 
                       "/mnt/h/Dispersal/rbmB_replicate1_processed/", 
                       "/mnt/h/Dispersal/rbmB_replicate2_processed/", 
                       "/mnt/h/Dispersal/rbmB_replicate3_processed/", 
                       "/mnt/h/Dispersal/rbmB_replicate4_processed/", 
-                      "/mnt/h/Dispersal/rbmB_replicate5_processed/"]
+                      "/mnt/h/Dispersal/rbmB_replicate5_processed/",
+                      "/mnt/h/Dispersal/lapG_replicate1_processed/", 
+                      "/mnt/h/Dispersal/lapG_replicate2_processed/", 
+                      "/mnt/h/Dispersal/lapG_replicate3_processed/", 
+                      "/mnt/h/Dispersal/lapG_replicate4_processed/", 
+                      "/mnt/h/Dispersal/lapG_replicate5_processed/"] 
     dx = 8
     dy = 8
     dz = 8
@@ -189,24 +190,28 @@ function main()
             end
         end
     end
-    data = vcat(WT_averages, cheY_averages, lapG_averages, rbmB_averages)
+    data = vcat(WT_averages, cheY_averages, rbmB_averages, lapG_averages) .* 0.065
+    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(cheY_averages)))
+    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(lapG_averages)))
+    @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmB_averages)))
     averages = [mean(data[1:5]), mean(data[6:10]), mean(data[11:15]), mean(data[16:20])]
     maxes = [maximum(data[1:5]), maximum(data[6:10]), maximum(data[11:15]), maximum(data[16:20])]
     mins = [minimum(data[1:5]), minimum(data[6:10]), minimum(data[11:15]), minimum(data[16:20])]
     category_num_swarm = Int.(repeat(1:4, inner = 5))
-    fig = Figure(size=(3*72, 3*72))
+    fig = Figure(size=(4*72, 3.5*72))
 	category_num = Int.(1:4)
 	category_num_swarm = Int.(repeat(1:4, inner=5))
 	ax = Axis(fig[1, 1])
-	colormap = Makie.to_colormap(:Pastel1_4)
+    colormap1 = [[:black]; Makie.wong_colors()[1:3]]
+    colormap2 = [[:white]; Makie.wong_colors()[1:3]]
 	crossbar!(ax, category_num, averages, mins, maxes; 
-			  color=:white, midlinecolor=colormap, colormap, colorrange=(1,4))
+			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,4))
     plt = beeswarm!(ax, category_num_swarm, Float64.(data), color = category_num_swarm, algorithm=UniformJitter(), strokewidth=1)
-	plt.colormap[] = colormap 
+    plt.colormap[] = colormap2 
     ax.xticks=(1:4, conditions)
     ax.xticklabelrotation=45
     ax.xlabel=""
-    ax.ylabel="Radial displacement \n (µm)"
+    ax.ylabel="Radial displacement (µm)"
     ax.title=""
     ax.rightspinevisible = false
     ax.topspinevisible = false

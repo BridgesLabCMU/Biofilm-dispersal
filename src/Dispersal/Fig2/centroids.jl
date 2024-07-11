@@ -50,7 +50,7 @@ end
 function centroid(data)
     total_sum = sum(data)
     positions = 1:length(data)
-    weighted_sum = sum(data[i] * positions[i] for i in eachindex(data))
+    weighted_sum = sum(data[i] * positions[i] for i in eachindex(data)) 
     return weighted_sum / total_sum
 end
 
@@ -93,10 +93,10 @@ function main()
     colormap = Makie.wong_colors()
     fig = Figure(size=(4*72, 3*72))
     ax = Axis(fig[1, 1])
-    lines!(ax, 1:length(data_mean), data_mean, label="Data", linewidth=2)
+    lines!(ax, 1:length(data_mean), data_mean, label="Data", color=:black, linewidth=2)
     #lines!(ax, 1:length(data_mean), in_out_mean, label="Inside-out")
     #lines!(ax, 1:length(data_mean), out_in_mean, label="Outside-in")
-    lines!(ax, 1:length(data_mean), random_mean, color=4, colormap=Makie.wong_colors(), colorrange=(1,7), label="Random", linewidth=2)
+    lines!(ax, 1:length(data_mean), random_mean, color=:black, linestyle=:dash, label="Random", linewidth=2)
     ax.xticks = xs
     ax.yticks = ys
     ax.xtickformat=values->string.([Int(div(v,6)) for v in values])
