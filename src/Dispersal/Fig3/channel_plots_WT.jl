@@ -11,6 +11,7 @@ using ImageMorphology
 using Images
 using HistogramThresholding
 using DelimitedFiles
+using DataFrames, CSV
 
 function calculate_radial_component(u, v, w, dx,dy,dz, central_point)
     nx, ny, nz = size(u)
@@ -53,7 +54,8 @@ function main()
     WT_seen = false
     fig = Figure(size=(4*72, 3.5*72))
 	ax = CairoMakie.Axis(fig[1, 1])
-    for images_folder in images_folders
+    all_data = []
+    for (k,images_folder) in enumerate(images_folders)
         folder = images_folder*"/Displacements/"
         files = sort([f for f in readdir(folder, join=true) if occursin("piv", f)], lt=natural)
         mask_files = sort([f for f in readdir(images_folder, join=true) if occursin("mask_isotropic", f)], lt=natural)
@@ -107,6 +109,7 @@ function main()
             channel_volume = sum(radial_component .> radial_component_mean .+ 4) / sum(distance .>= 0)
             time_data[j-first_index+1] = channel_volume
         end
+        writedlm("$(plots_folder)/WT_channels_$(string(k)).csv", time_data, ",")
         xs = 0:6:length(time_data)-1
         xaxis = 1:length(time_data)
         xaxis /= 6

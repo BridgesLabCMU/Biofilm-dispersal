@@ -59,7 +59,7 @@ function main()
     plot_filenames = ["cheY_centroids", "lapG_centroids", "rbmB_centroids"]
     n = 5 
     ytick_interval = n/0.065/30
-    plot_ylabel = "Distance from center \n (µm)"
+    plot_ylabel = "Distance from center (µm)"
     plot_xlabel = "Time (h)"
     for plot_filename in plot_filenames
         for i in 1:5
@@ -73,6 +73,8 @@ function main()
             ax = Axis(fig[1, 1])
             lines!(ax, 1:length(data_centroids), data_centroids, color=:black, label="Data", linewidth=2)
             lines!(ax, 1:length(data_centroids), random_centroids, color=:black, linestyle=:dash, label="Random", linewidth=2)
+            writedlm("$(plots_folder)/$(plot_filename[1:4])_centroids_$(string(i)).csv", data_centroids, ",")
+            writedlm("$(plots_folder)/$(plot_filename[1:4])_random_centroids_$(string(i)).csv", random_centroids, ",")
             ax.xticks = xs
             ax.yticks = ys
             ax.xtickformat=values->string.([Int(div(v,6)) for v in values])

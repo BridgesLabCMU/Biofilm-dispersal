@@ -16,6 +16,8 @@ using DelimitedFiles
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
+
+
 function radial_averaging(data_files, bin_interval)
     first_image = TiffImages.load(data_files[1]) .> 0
     labels = label_components(first_image)
@@ -44,36 +46,45 @@ end
 
 function main()
     plot_ylabel = "Density (a.u.)"
-    plot_xlabel = "Distance from center \n (µm)"
+    plot_xlabel = "Distance from center (µm)"
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
     image_folders = [f for f in image_folders if occursin("WT", f)]
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
-    n = 5 
-    xtick_interval = n/0.065/30
+    plot_filename = "final_timepoint_density" 
 
-    for (i,images_folder) in enumerate(image_folders)
-        plot_filename = "final_timepoint_density_"*string(i) 
+    data = []
+    random = []
+    for images_folder in image_folders
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
         data_distribution, random_distribution = radial_averaging(files, 8)
-        xs = 0:xtick_interval:length(data_distribution)-1
-        fig = Figure(size=(6*72, 3*72))
-        ax = Axis(fig[1, 1])
-        lines!(ax, 0:length(data_distribution)-1, data_distribution, label="Data", color=:black, linewidth=2)
-        lines!(ax, 0:length(data_distribution)-1, random_distribution, label="Random model",color=:black, linestyle=:dash,linewidth=2)
-        ax.xticks = xs
-        ax.xtickformat=values->string.([round(Int, v*n/xtick_interval) for v in values])
-        ax.xlabel = plot_xlabel
-        ax.ylabel = plot_ylabel
-        ax.rightspinevisible = false
-        ax.topspinevisible = false
-        ax.xgridvisible = false
-        ax.ygridvisible = false
-        fig[1,2] = Legend(fig, ax, framevisible=false, labelsize=12, rowgap=0)
-        save("$plots_folder/$plot_filename"*".pdf", fig)
+        push!(data, data_distribution)
+        push!(random, random_distribution)
     end
+
+    data_mean = [mean([x[i] for x in data]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    random_mean = [mean([x[i] for x in random]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    writedlm("$(plots_folder)/WT_data_density.csv", data_mean, ",")
+    writedlm("$(plots_folder)/WT_random_density.csv", random_mean, ",")
+    n = 5 
+    xtick_interval = n/0.065/30
+    xs = 0:xtick_interval:length(data_mean)-1
+    fig = Figure(size=(7*72, 3*72))
+    ax = Axis(fig[1, 1])
+    lines!(ax, 0:length(data_mean)-1, data_mean, label="Data", color=:black, linewidth=2)
+    lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model",color=:black, linestyle=:dash,linewidth=2)
+    ax.xticks = xs
+    ax.xtickformat=values->string.([round(Int, v*n/xtick_interval) for v in values])
+    ax.xlabel = plot_xlabel
+    ax.ylabel = plot_ylabel
+    ax.rightspinevisible = false
+    ax.topspinevisible = false
+    ax.xgridvisible = false
+    ax.ygridvisible = false
+    fig[1,2] = Legend(fig, ax, framevisible=false, labelsize=12, rowgap=0)
+    save("$plots_folder/$plot_filename"*".pdf", fig)
 end
 
 main()

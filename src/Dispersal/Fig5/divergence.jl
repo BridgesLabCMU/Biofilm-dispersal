@@ -156,6 +156,7 @@ function main()
 		end
     end
     data = vcat(WT_averages, rbmA_averages) .* 0.065
+    writedlm("$(plots_folder)/Fig5D.csv", data, ",")                                                                 
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmA_averages)))
     averages = [mean(data[1:5]), mean(data[6:10])]
     maxes = [maximum(data[1:5]), maximum(data[6:10])]

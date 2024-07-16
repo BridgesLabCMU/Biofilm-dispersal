@@ -59,7 +59,7 @@ function main()
     plot_filename = "rbmA_centroids"
     n = 5
     ytick_interval = n/0.065/30
-    plot_ylabel = "Distance from center \n (µm)"
+    plot_ylabel = "Distance from center (µm)"
     plot_xlabel = "Time (h)"
     for i in 1:5
         data = readdlm(plots_folder*"/rbmA_replicate"*string(i)*"_processed_data_intensity.csv", ',')[1:end,1:end,1]
@@ -72,6 +72,8 @@ function main()
         ax = Axis(fig[1, 1])
         lines!(ax, 1:length(data_centroids), data_centroids, label="Data", color=:black, linewidth=2)
         lines!(ax, 1:length(data_centroids), random_centroids, label="Random", color=:black, linestyle=:dash, colorrange=(1,7), linewidth=2)
+        writedlm("$(plots_folder)/rbmA_centroids_$(string(i)).csv", data_centroids, ",")                                                                 
+        writedlm("$(plots_folder)/rbmA_random_centroids_$(string(i)).csv", random_centroids, ",")
         ax.xticks = xs
         ax.yticks = ys
         ax.xtickformat=values->string.([Int(div(v,6)) for v in values])

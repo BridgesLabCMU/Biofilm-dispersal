@@ -80,7 +80,7 @@ end
 
 function main()
     plot_xlabel = "Time (h)"
-    plot_ylabel = "Distance from center \n (µm)"
+    plot_ylabel = "Distance from center (µm)"
     plot_title = "Random model"
 
     master_directory = "/mnt/h/Dispersal"

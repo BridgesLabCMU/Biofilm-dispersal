@@ -26,16 +26,8 @@ function load_images(image_files, first_index, end_index)
     return images
 end
 
-function N_largest(M, n)
-    v = vec(M)
-    l = length(v)
-    perm = partialsortperm(v, (l-n+1):l)
-    indices = CartesianIndices(M)[perm]
-    return indices
-end
-
-function radial_averaging(files, first_index, end_index, bin_interval, masks)
-    first_image = TiffImages.load(files[first_index])
+function radial_averaging(first_index, end_index, bin_interval, masks)
+    first_image = masks[:,:,:,1] 
     labels = label_components(first_image)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
@@ -59,20 +51,16 @@ function radial_averaging(files, first_index, end_index, bin_interval, masks)
             curr_density = curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
             next_density = next_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
             if sum(curr_density) > sum(next_density)
-                budget[t] -= sum(next_density .- curr_density)
+                budget[t] -= (sum(next_density) - sum(curr_density))
             end
         end
     end
     for t in 1:ntimepoints-1
         biofilm_configuration = masks[:,:,:,t]
         dispersal_config .= 0 
-        N_voxels = N_largest(biofilm_configuration .* center_distance, budget[t])
-        boundary[t] = maximum(center_distance .* (biofilm_configuration .> 0))
-        if N_voxels == CartesianIndex[]
-            for i in 1:size(data_matrix, 1) 
-                data_matrix[i, t] = 0 
-            end
-        else
+        if budget[t] <= sum(biofilm_configuration)
+            N_voxels = sample(findall(!iszero, biofilm_configuration), budget[t], replace=false)
+            boundary[t] = maximum(center_distance .* (biofilm_configuration .> 0))
             dispersal_config[N_voxels] .= 1 
             for i in 1:size(data_matrix, 1) 
                 data_matrix[i, t] = -1*mean(dispersal_config[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
@@ -92,8 +80,8 @@ end
 
 function main()
     plot_xlabel = "Time (h)"
-    plot_ylabel = "Distance from center \n (µm)"
-    plot_title = "Outside-in model"
+    plot_ylabel = "Distance from center (µm)"
+    plot_title = "Random model"
 
     master_directory = "/mnt/h/Dispersal"
     image_folders = filter(isdir, readdir(master_directory, join=true))
@@ -103,7 +91,7 @@ function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
 
     for images_folder in image_folders
-        plot_filename = basename(images_folder)*"_out_in_net_downsampled" 
+        plot_filename = basename(images_folder)*"_random_net_downsampled" 
         files = sort([f for f in readdir(images_folder, join=true) if occursin("downsampled_mask", f)], 
                                  lt=natural)
         all_files = sort([f for f in readdir(images_folder, join=true) if occursin("stack", f)], 
@@ -113,7 +101,7 @@ function main()
         first_index = argmax(net)
         end_index = min(first_index + 45, ntimepoints)
         masks = load_images(files, first_index, end_index)
-        data_matrix, boundary = radial_averaging(files, first_index, end_index, 8, masks)
+        data_matrix, boundary = radial_averaging(first_index, end_index, 8, masks)
         data_matrix .*= 6
         boundary ./= 8
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
@@ -123,8 +111,9 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
+        colormap = cgrad(["#cf34eb", :white])#:devon
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
-                      transpose(data_matrix), colormap=:devon, padding=(0.0, 0.0))
+                      transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)
         Colorbar(fig[:, end+1], hm, label="Density change/h", tickformat="{:.1f}")
         ax.xticks = xs

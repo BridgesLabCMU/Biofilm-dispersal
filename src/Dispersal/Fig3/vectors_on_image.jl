@@ -67,6 +67,8 @@ function main()
     slice = round(Int, image_slice/size(image,3)*size(u_growth, 3))
     hm = heatmap!(ax, Int.(1:size(image, 2)).-1, Int.(size(image,1):-1:1).-1, Float32.(transpose(image[:,:,image_slice])), colormap=:grays)
     ar = arrows!(ax, (x.-1), (y.-1), u_growth[:,:,slice], v_growth[:,:,slice], arrowsize=6, arrowcolor=:salmon, linecolor=:salmon)
+    writedlm("$(plots_folder)/channels_u.csv", u_growth[:,:,slice], ",")
+    writedlm("$(plots_folder)/channels_v.csv", v_growth[:,:,slice], ",")
     ax.title = ""
     ax.xticksvisible=false
     ax.yticksvisible=false

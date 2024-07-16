@@ -168,6 +168,7 @@ function main()
         end
     end
     data = vcat(WT_averages, cheY_averages, lapG_averages, rbmB_averages)
+    writedlm("$(plots_folder)/Fig4G.csv", data, ",")
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(cheY_averages)))
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(lapG_averages)))
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(rbmB_averages)))

@@ -121,6 +121,12 @@ function main()
     ax2 = CairoMakie.Axis(fig[1,2])
     ar = arrows!(ax, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_growth[:,15,:], w_growth[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_growth[:,15,:]), linecolor=vec(radial_component_growth[:,15,:]),colorrange=(-2,1), colormap=:berlin)
     ar2 = arrows!(ax2, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_dispersal[:,15,:], w_dispersal[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_dispersal[:,15,:]), linecolor=vec(radial_component_dispersal[:,15,:]),colorrange=(-2,1), colormap=:berlin)
+    writedlm("$(plots_folder)/growth_u.csv", u_growth[:,15,:], ",")
+    writedlm("$(plots_folder)/growth_v.csv", w_growth[:,15,:], ",")
+    writedlm("$(plots_folder)/color_growth.csv", radial_component_growth[:,15,:], ",")
+    writedlm("$(plots_folder)/dispersal_u.csv", u_dispersal[:,15,:], ",")
+    writedlm("$(plots_folder)/dispersal_v.csv", w_dispersal[:,15,:], ",")
+    writedlm("$(plots_folder)/color_dispersal.csv", radial_component_dispersal[:,15,:], ",")
     Colorbar(fig[:, end+1], limits=(-2,1), label="Radial displacement (µm)", colormap=:berlin)
 	ax.xlabel = plot_xlabel
     ax.ylabel = plot_ylabel

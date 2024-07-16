@@ -133,6 +133,12 @@ function main()
         ar = arrows!(ax, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_growth[:,15,:], w_growth[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_growth[:,15,:]), linecolor=vec(radial_component_growth[:,15,:]),colorrange=(-2,1), colormap=:berlin)
         ar2 = arrows!(ax2, (x.-1 .- com_images[1]).*0.065, (z.-1).*4 .* 0.065, u_dispersal[:,15,:], w_dispersal[:,15,:].*4, arrowsize=4, arrowcolor=vec(radial_component_dispersal[:,15,:]), linecolor=vec(radial_component_dispersal[:,15,:]),colorrange=(-2,1), colormap=:berlin)
         Colorbar(fig[:, end+1], limits=(-2,1), label="Radial displacement \n (µm)", colormap=:berlin)
+        writedlm("$(plots_folder)/growth_u_$(string(k)).csv", u_growth[:,15,:], ",")
+        writedlm("$(plots_folder)/growth_v_$(string(k)).csv", w_growth[:,15,:], ",")
+        writedlm("$(plots_folder)/color_growth_$(string(k)).csv", radial_component_growth[:,15,:], ",")
+        writedlm("$(plots_folder)/dispersal_u_$(string(k)).csv", u_dispersal[:,15,:], ",")
+        writedlm("$(plots_folder)/dispersal_v_$(string(k)).csv", w_dispersal[:,15,:], ",")
+        writedlm("$(plots_folder)/color_dispersal_$(string(k)).csv", radial_component_dispersal[:,15,:], ",")
         ax.xlabel = plot_xlabel
         ax.ylabel = plot_ylabel
         ax.title = ""
