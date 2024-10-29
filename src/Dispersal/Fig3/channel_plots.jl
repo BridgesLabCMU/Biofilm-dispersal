@@ -180,8 +180,8 @@ function main()
 	category_num = Int.(1:4)
 	category_num_swarm = Int.(repeat(1:4, inner=5))
 	ax = CairoMakie.Axis(fig[1, 1])
-    colormap1 = [[:black]; Makie.wong_colors()[1:3]]
-    colormap2 = [[:white]; Makie.wong_colors()[1:3]]
+    colormap1 = [[:black]; Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
+    colormap2 = [[:white]; Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
 	crossbar!(ax, category_num, averages, mins, maxes; 
 			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,4))
     plt = beeswarm!(ax, category_num_swarm, Float64.(data), color = category_num_swarm, algorithm=UniformJitter(), strokewidth=1)
@@ -189,7 +189,7 @@ function main()
     ax.xticks=(1:4, conditions)
     ax.xticklabelrotation=45
     ax.xlabel=""
-    ax.ylabel=rich("Channel volume fraction (a.u.)")
+    ax.ylabel=rich("Dynamic region fraction (a.u.)")
     ax.title=""
     ax.rightspinevisible = false
     ax.topspinevisible = false

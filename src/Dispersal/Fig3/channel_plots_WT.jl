@@ -116,7 +116,7 @@ function main()
         lines!(ax, xaxis, time_data, color = :black)
     end
     ax.xlabel="Time (h)"
-    ax.ylabel=rich("Channel volume fraction (a.u.)")
+    ax.ylabel=rich("Dynamic region fraction (a.u.)")
     ax.title=""
     ax.rightspinevisible = false
     ax.topspinevisible = false

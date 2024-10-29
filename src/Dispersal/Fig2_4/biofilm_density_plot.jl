@@ -16,8 +16,6 @@ using DelimitedFiles
 
 round_up(x, multiple) = ceil(x / multiple) * multiple
 
-
-
 function radial_averaging(data_files, bin_interval)
     first_image = TiffImages.load(data_files[1]) .> 0
     labels = label_components(first_image)
@@ -66,15 +64,19 @@ function main()
 
     data_mean = [mean([x[i] for x in data]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
     random_mean = [mean([x[i] for x in random]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    data_std = [std([x[i] for x in data]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
+    random_std = [std([x[i] for x in random]) for i in 1:minimum(length(data[j]) for j in 1:length(data))]
     writedlm("$(plots_folder)/WT_data_density.csv", data_mean, ",")
     writedlm("$(plots_folder)/WT_random_density.csv", random_mean, ",")
     n = 5 
-    xtick_interval = n/0.065/30
+    xtick_interval = n/(0.065*4*8)
     xs = 0:xtick_interval:length(data_mean)-1
     fig = Figure(size=(7*72, 3*72))
     ax = Axis(fig[1, 1])
     lines!(ax, 0:length(data_mean)-1, data_mean, label="Data", color=:black, linewidth=2)
+    band!(ax, 0:length(data_mean)-1, data_mean + data_std, data_mean - data_std, color=(:black,0.1))
     lines!(ax, 0:length(data_mean)-1, random_mean, label="Random model",color=:black, linestyle=:dash,linewidth=2)
+    band!(ax, 0:length(data_mean)-1, random_mean + random_std, random_mean - random_std, color=(:black,0.1))
     ax.xticks = xs
     ax.xtickformat=values->string.([round(Int, v*n/xtick_interval) for v in values])
     ax.xlabel = plot_xlabel

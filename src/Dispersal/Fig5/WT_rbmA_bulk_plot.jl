@@ -39,7 +39,7 @@ function main()
         data = data_norm
         if lab == "WT"
             color = 1 
-            colormap = [[:black]; Makie.wong_colors()[4]]
+            colormap = [[:black]; Makie.wong_colors()[3]]
             if WT_seen
                 condition = nothing 
             else
@@ -48,7 +48,7 @@ function main()
             end
         elseif lab == "rbmA"
             color = 2
-            colormap = [[:black]; Makie.wong_colors()[4]]
+            colormap = [[:black]; Makie.wong_colors()[3]]
             if rbmA_seen
                 condition = nothing 
             else

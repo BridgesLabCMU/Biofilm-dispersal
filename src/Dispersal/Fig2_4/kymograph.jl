@@ -100,16 +100,16 @@ function main()
         # Radially average the result
         data_matrix, boundary = radial_averaging(first_index, end_index, 8, dispersal_mask)
         data_matrix = diff(data_matrix, dims=2) .* 6
-        boundary = boundary ./ 8#[1:end-1] ./ 8
+        boundary = boundary ./ 8
         data_matrix[data_matrix .> 0] .= 0
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
         n = 10 
-        ytick_interval = n/0.065/30
+        ytick_interval = n/(0.065*4*8) # µm interval / bin side length in µm
         xs = 0:6:size(data_matrix, 2)-1
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
-        colormap = cgrad(["#cf34eb", :white])#:devon
+        colormap = cgrad(["#cf34eb", :white])
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
                       transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)

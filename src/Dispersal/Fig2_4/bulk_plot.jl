@@ -50,7 +50,7 @@ function main()
         if lab == "WT"
             push!(WT, peak_biofilm)
             color = 1 
-            colormap = [[:black];  Makie.wong_colors()[1:3]]
+            colormap = [[:black];  Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
             if WT_seen
                 condition = nothing 
             else
@@ -61,7 +61,7 @@ function main()
         elseif lab == "cheY"
             push!(cheY, peak_biofilm)
             color = 2
-            colormap = [[:black];  Makie.wong_colors()[1:3]]
+            colormap = [[:black];  Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
             if cheY_seen
                 condition = nothing 
             else
@@ -72,7 +72,7 @@ function main()
         elseif lab == "rbmB"
             push!(rbmB, peak_biofilm)
             color = 4
-            colormap = [[:black];  Makie.wong_colors()[1:3]]
+            colormap = [[:black];  Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
             if rbmB_seen
                 condition = nothing 
             else
@@ -83,7 +83,7 @@ function main()
         elseif lab == "lapG"
             push!(lapG, peak_biofilm)
             color = 3 
-            colormap = [[:black];  Makie.wong_colors()[1:3]]
+            colormap = [[:black];  Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
             if lapG_seen
                 condition = nothing 
             else

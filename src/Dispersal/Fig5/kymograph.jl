@@ -118,7 +118,7 @@ function main()
         data_matrix[data_matrix .> 0] .= 0
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
         n = 10 
-        ytick_interval = n/0.065/30
+        ytick_interval = n/(0.065*4*8) # interval in µm / bin side length in µm
         xs = 0:6:size(data_matrix, 2)-1
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))

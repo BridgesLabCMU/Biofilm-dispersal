@@ -203,8 +203,8 @@ function main()
 	category_num = Int.(1:4)
 	category_num_swarm = Int.(repeat(1:4, inner=5))
 	ax = Axis(fig[1, 1])
-    colormap1 = [[:black]; Makie.wong_colors()[1:3]]
-    colormap2 = [[:white]; Makie.wong_colors()[1:3]]
+    colormap1 = [[:black]; Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
+    colormap2 = [[:white]; Makie.wong_colors()[1:2]; Makie.wong_colors()[4]]
 	crossbar!(ax, category_num, averages, mins, maxes; 
 			  color=:white, midlinecolor=colormap1, colormap1, colorrange=(1,4))
     plt = beeswarm!(ax, category_num_swarm, Float64.(data), color = category_num_swarm, algorithm=UniformJitter(), strokewidth=1)

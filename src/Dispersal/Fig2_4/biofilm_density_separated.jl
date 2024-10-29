@@ -51,7 +51,7 @@ function main()
     filter!(folder->folder≠master_directory*"/Plots", image_folders)
     plots_folder = "/mnt/h/Dispersal/Plots"
     n = 5 
-    xtick_interval = n/0.065/30
+    xtick_interval = n/(0.065*4*8)
 
     for (i,images_folder) in enumerate(image_folders)
         plot_filename = "final_timepoint_density_"*string(i) 

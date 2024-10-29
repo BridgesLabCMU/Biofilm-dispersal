@@ -57,7 +57,7 @@ end
 function main()
     plots_folder = "/mnt/h/Dispersal/Plots"
     n = 5 
-    ytick_interval = n/0.065/30
+    ytick_interval = n/(0.065*4*8)
     plot_ylabel = "Distance from center (µm)"
     plot_xlabel = "Time (h)"
     colormap = Makie.wong_colors()

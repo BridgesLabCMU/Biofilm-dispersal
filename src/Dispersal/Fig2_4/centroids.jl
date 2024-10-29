@@ -76,17 +76,17 @@ function main()
         push!(random_all, random_centroids)
     end
     data_mean = [mean([x[i] for x in data_all]) for i in 1:length(data_all[1])]
-    data_std = [std([x[i] for x in data_all]) for i in 1:length(data_all[1])]
+    data_std = [std([x[i] .- x[1] for x in data_all]) for i in 1:length(data_all[1])]
     in_out_mean = [mean([x[i] for x in in_out_all]) for i in 1:length(in_out_all[1])]
     in_out_std = [std([x[i] for x in in_out_all]) for i in 1:length(in_out_all[1])]
     out_in_mean = [mean([x[i] for x in out_in_all]) for i in 1:length(out_in_all[1])]
     out_in_std = [std([x[i] for x in out_in_all]) for i in 1:length(out_in_all[1])]
     random_mean = [mean([x[i] for x in random_all]) for i in 1:length(random_all[1])]
-    random_std = [std([x[i] for x in random_all]) for i in 1:length(random_all[1])]
+    random_std = [std([x[i] .- x[1] for x in random_all]) for i in 1:length(random_all[1])]
     writedlm("$(plots_folder)/WT_centroids_mean.csv", data_mean, ",")
     writedlm("$(plots_folder)/WT_random_centroids_mean.csv", random_mean, ",")
     n = 5 
-    ytick_interval = n/0.065/30
+    ytick_interval = n/(0.065*4*8)
     data = readdlm(plots_folder*"/WT_replicate5_processed_data_intensity.csv", ',')[1:end,1:end,1]
     xs = 0:6:length(data_mean)-1
     ys = 0:ytick_interval:size(data, 1)-1
@@ -96,7 +96,9 @@ function main()
     fig = Figure(size=(4*72, 3*72))
     ax = Axis(fig[1, 1])
     lines!(ax, 1:length(data_mean), data_mean, label="Data", color=:black, linewidth=2)
+    band!(ax, 1:length(data_mean), data_mean + data_std, data_mean - data_std, color=(:black,0.1))
     lines!(ax, 1:length(data_mean), random_mean, color=:black, linestyle=:dash, label="Random", linewidth=2)
+    band!(ax, 1:length(data_mean), random_mean + random_std, random_mean - random_std, color=(:black,0.1))
     ax.xticks = xs
     ax.yticks = ys
     ax.xtickformat=values->string.([Int(div(v,6)) for v in values])
