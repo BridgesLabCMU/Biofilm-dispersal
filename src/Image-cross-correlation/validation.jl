@@ -6,6 +6,7 @@ function validate!(flags, u, v, w, s2n, i, params)
                        Fill(NaN))
         wm = mapwindow(nanmedian, w, ntuple(x->params.median_size*2+1, 3),
                        Fill(NaN))
+        # Mark locations where vector is larger than local median by a threshold
         flags[abs.(u .- um) .> params.median_thresh] .= true
         flags[abs.(v .- vm) .> params.median_thresh] .= true
         flags[abs.(w .- wm) .> params.median_thresh] .= true
@@ -14,11 +15,13 @@ function validate!(flags, u, v, w, s2n, i, params)
         ustd = mapwindow(std, u, ntuple(x->params.std_size*2+1, 3))
         vstd = mapwindow(std, v, ntuple(x->params.std_size*2+1, 3))
         wstd = mapwindow(std, w, ntuple(x->params.std_size*2+1, 3))
+        # Mark locations where vector std is larger than local std by a threshold
         flags[ustd .> params.std_thresh] .= true
         flags[vstd .> params.std_thresh] .= true
         flags[wstd .> params.std_thresh] .= true
     end
     if params.global_validate
+        # Mark locations where vector is larger than global threshold
         flags[u .< params.u_thresh[1]] .= true
         flags[u .> params.u_thresh[2]] .= true
         flags[v .< params.v_thresh[1]] .= true
@@ -27,12 +30,14 @@ function validate!(flags, u, v, w, s2n, i, params)
         flags[w .> params.w_thresh[2]] .= true
     end
     if params.s2n_validate
+        # Mark locations where signal to noise ratio is smaller than threshold
         flags[s2n .< params.s2n_thresh] .= true
     end
     return nothing
 end
 
 function replace_nans!(array, filled, max_iter, tol; kernel_size=2)
+    # Replace NaNs in array with local mean using an image inpainting approach
     n_dim = ndims(array)
     nan_indices = Tuple.(findall(isnan.(array)))
     nan_indices_cartesian = findall(isnan.(array))
@@ -66,6 +71,7 @@ end
 
 function replace_outliers(u, v, w, flags, params; max_iter=3, tol=1e-8, kernel_size=3)
     if params.replace_method == "localmean"
+        # Replace spurious vectors with local mean
         u[flags] .= NaN
         v[flags] .= NaN 
         w[flags] .= NaN 
@@ -77,6 +83,7 @@ function replace_outliers(u, v, w, flags, params; max_iter=3, tol=1e-8, kernel_s
         replace_nans!(w, w_replaced, max_iter, tol, kernel_size=kernel_size)
         return u_replaced, v_replaced, w_replaced 
     elseif params.replace_method == "zero"
+        # Simply replace spurious vectors with 0
         u[flags] .= 0.0
         v[flags] .= 0.0
         w[flags] .= 0.0

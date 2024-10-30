@@ -1,3 +1,5 @@
+# See kymograph.jl for additional comments on methods
+
 using Makie
 using GLMakie
 using CairoMakie
@@ -32,6 +34,8 @@ function radial_averaging(data_files, bin_interval)
     data_distribution = zeros(nbins-1)
     random_distribution = zeros(nbins-1)
     data_configuration = TiffImages.load(data_files[end]) .> 0
+    # To get the random configuration, sample the number of 1-voxels in the first image of dispersal
+    # equivalent to the total number that dispersed experimentally without replacement
     N_voxels = sample(findall(!iszero, first_image), sum(first_image) - sum(data_configuration), replace=false)
     random_configuration = copy(first_image)
     random_configuration[N_voxels] .= 0

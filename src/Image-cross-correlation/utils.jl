@@ -39,17 +39,20 @@ function pivSettings(;image_folder="", mpass=3, windows=[(64,64,16), (32,32,8), 
 end
 
 function transform_coords(x, y, z, u, v, w)
+    # Transform from image to physical coordinates
     y = y[end:-1:1]
     v .*= -1
     return x, y, z, u, v, w
 end
 
 function field_shape(image_shape, window_size, overlap)
+    # Shape of PIV field
     return tuple([(i - w) ÷ (w - o) + 1 for 
                   (i, w, o) in zip(image_shape, window_size, overlap)]...)
 end
 
 function compute_coords(image_shape, window_size, overlap)
+    # Get x, y, z coordinates of PIV field
     shape = field_shape(image_shape, window_size, overlap)
     x = (0:shape[2]-1) .* (window_size[2] - overlap[2]) .+ window_size[2] ÷ 2 .+ 1
     y = (0:shape[1]-1) .* (window_size[1] - overlap[1]) .+ window_size[1] ÷ 2 .+ 1

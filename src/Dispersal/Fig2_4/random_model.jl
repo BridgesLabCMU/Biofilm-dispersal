@@ -1,3 +1,5 @@
+# See kymograph.jl for additional comments on methods
+
 using Makie
 using GLMakie
 using CairoMakie
@@ -42,14 +44,18 @@ function radial_averaging(first_index, end_index, bin_interval, masks)
     ntimepoints = end_index - first_index
     data_matrix = zeros(nbins-1, ntimepoints-1)
     boundary = zeros(ntimepoints)
+    # Initialize an array that stores the number of voxels allowed to disperse (1->0)
     budget = zeros(Int, ntimepoints-1)
+    # Initialize an array that stores the locations of dispersing voxels 
     dispersal_config = zeros(Bool, size(center_distance))
     for t in 1:ntimepoints-1
         @views curr_mask = masks[:,:,:,t]
         @views next_mask = masks[:,:,:,t+1]
         for i in 1:size(data_matrix, 1) 
+            # For each bin, calculate the density at the current and next timepoint
             curr_density = curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
             next_density = next_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)]
+            # If the density at the next timepoint is less than the current timepoint, store
             if sum(curr_density) > sum(next_density)
                 budget[t] -= (sum(next_density) - sum(curr_density))
             end
@@ -59,10 +65,14 @@ function radial_averaging(first_index, end_index, bin_interval, masks)
         biofilm_configuration = masks[:,:,:,t]
         dispersal_config .= 0 
         if budget[t] <= sum(biofilm_configuration)
+            # If the budget is less than the number of biofilm voxels, sample the right number of 1-voxels, without replacement
             N_voxels = sample(findall(!iszero, biofilm_configuration), budget[t], replace=false)
+            # Boundary is the same as the data boundary
             boundary[t] = maximum(center_distance .* (biofilm_configuration .> 0))
+            # Set the dispersed voxel configuration to 1 where voxles were sampled for dispersal
             dispersal_config[N_voxels] .= 1 
             for i in 1:size(data_matrix, 1) 
+                # kymograph = -1*average # of 1's in each bin in the dispersal configuration
                 data_matrix[i, t] = -1*mean(dispersal_config[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
             end
         end
@@ -111,7 +121,7 @@ function main()
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])
-        colormap = cgrad(["#cf34eb", :white])#:devon
+        colormap = cgrad(["#cf34eb", :white])
         hm = heatmap!(ax, 0:size(data_matrix,2), 0:size(data_matrix,1), 
                       transpose(data_matrix), colormap=colormap, padding=(0.0, 0.0))
         lines!(ax, 0:size(data_matrix, 2), boundary, color=:black)

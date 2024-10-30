@@ -25,7 +25,7 @@ function mask_dispersal_images(downsampled, images_folder)
     for i in 1:size(downsampled, 3)
         thresh = find_threshold(downsampled[:,:,i,:], Otsu())
         thresh = max(thresh, 1e-9)
-        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh#*1.5
+        @views mask[:,:,i,:] = downsampled[:,:,i,:] .> thresh
     end
     for i in 1:size(downsampled, 4)
         TiffImages.save(images_folder*"/downsampled_mask_$(i).tif", Gray.(mask[:,:,:,i]))
@@ -47,24 +47,33 @@ function gaussian_downsample(image_files, first_index, end_index)
 end
 
 function radial_averaging(first_index, end_index, bin_interval, dispersal_mask)
+    # Step 1: get the center at the substrate of the biofilm at the first timepoint
     first_mask = dispersal_mask[:,:,:,1] 
     labels = label_components(first_mask)
     volumes = component_lengths(labels)
     centers = component_centroids(labels)
+    # Biofilm = largest connected component
     center = centers[argmax(volumes[1:end])]
     center = (round(Int, center[1]), round(Int, center[2]), 1)
+    # Step 2: get the distance of each voxel from the center
     center_distance = zeros(Bool, size(labels))
     center_distance[center[1], center[2], center[3]] = true
     center_distance = distance_transform(feature_transform(center_distance))
+    # Get the maximum distance from the center
     max_distance = round_up(maximum(center_distance), bin_interval)
     bins = 0:bin_interval:max_distance
     nbins = length(bins)
     ntimepoints = end_index - first_index
+    # Initialize kymograph (transposed) and boundary array
     data_matrix = zeros(nbins-1, ntimepoints)
     boundary = zeros(ntimepoints)
+    # Step 3: for each timepoint, the density in a given bin is the fraction of 1's inside the bin
+    # boundary is the maximum distance from the center at which a 1 is present in the mask (units of voxels)
     for t in 1:ntimepoints
         @views curr_mask = dispersal_mask[:,:,:,t]
         for i in 1:size(data_matrix, 1) 
+            # Find the voxels inside the bin by using the distance transform from the center
+            # Calculate the fraction of 1's in the bin by indexing the mask with the voxels inside the bin
             data_matrix[i, t] = mean(curr_mask[findall(x -> bins[i] <= x <= bins[i+1], center_distance)])
         end
         boundary[t] = maximum(center_distance .* curr_mask)
@@ -93,19 +102,21 @@ function main()
         # Get first and last indices for dispersal
         first_index = argmax(net)
         end_index = min(first_index + 45, ntimepoints)
-        # Downsample the relevant images and subtract consecutive timepoints
+        # Downsample the relevant images
         downsampled = gaussian_downsample(image_files, first_index, end_index)
-        # Mask the "dispersal images"
+        # Mask the downsampled images
         dispersal_mask = mask_dispersal_images(downsampled, images_folder)
-        # Radially average the result
+        # Radially average the result to generate the kymograph (units of density)
+        # Chosen bin side length = 8 pixels -> 0.065*4 µm / pixel -> 2.08 µm bin side length
         data_matrix, boundary = radial_averaging(first_index, end_index, 8, dispersal_mask)
+        # Subtract densities at consecutive timepoints to get density change / 10 min (*6 to get /hr) 
         data_matrix = diff(data_matrix, dims=2) .* 6
-        boundary = boundary ./ 8
-        data_matrix[data_matrix .> 0] .= 0
+        boundary = boundary ./ 8 # Convert boundary from units of voxels to units of bins
+        data_matrix[data_matrix .> 0] .= 0 # Isolate dispersing regions
         writedlm("$(plots_folder)/$(plot_filename).csv", data_matrix, ",")
-        n = 10 
-        ytick_interval = n/(0.065*4*8) # µm interval / bin side length in µm
-        xs = 0:6:size(data_matrix, 2)-1
+        n = 10 # Desired ytick interval in µm
+        ytick_interval = n/(0.065*4*8) # ytick interval =  desired µm interval / bin side length in µm
+        xs = 0:6:size(data_matrix, 2)-1 # xticks every hour
         ys = 0:ytick_interval:size(data_matrix, 1)-1
         fig = Figure(size=(5*72, 3*72))
         ax = Axis(fig[1, 1])

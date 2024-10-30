@@ -1,4 +1,5 @@
 module CleanTimelapse
+# Main module for preprocessing
 
 using Images 
 using NaturalSort
@@ -79,8 +80,8 @@ function time_dependent_processing(prev_mask, prev_img, curr_mask, curr_img, fir
 end
 
 function processing(timeseries_file, file_directory, dir, cell_threshold, registered_flag, frames, zstack_thresh)
-
     if !registered_flag
+        # If images haven't previously been registered, perform bkg sub and registration 
         timeseries = load_raw_images(file_directory, timeseries_file)
         height, width, slices, frames = size(timeseries)
         noback = similar(timeseries)
@@ -137,9 +138,10 @@ function processing(timeseries_file, file_directory, dir, cell_threshold, regist
 end
 
 function clean_timelapse(cell_threshold, file_directory, zstack_thresh)
-    
+    # Use flags to identify relevant files from the specified directory
     timeseries_files = [f for f in readdir(file_directory) if occursin("denoised", f) && occursin("WT_replicate1", f)]
 
+    # Perform preprocessing on all files in the directory
     for timeseries_file in timeseries_files
         dir = file_directory*timeseries_file[1:end-16]*"processed"
         if !isdir(dir)

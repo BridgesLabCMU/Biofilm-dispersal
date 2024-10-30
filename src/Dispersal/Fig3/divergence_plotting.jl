@@ -27,37 +27,47 @@ function choose_label(folder)
 end
 
 function calculate_radial_component(u, v, w, dx,dy,dz, central_point)
+    # Vector field comes in in units of voxels
+    # Function to calculate radial components, given PIV vector field, 
     nx, ny, nz = size(u)
+    # Get grid coordinates (in grid units)
     x = reshape(1:nx, nx, 1, 1)
     y = reshape(1:ny, 1, ny, 1)
     z = reshape(1:nz, 1, 1, nz)
+    # Grid coordinates relative to the center of mass
     dx = x .- central_point[1]
     dy = y .- central_point[2]
     dz = z .- central_point[3]
 	dx = repeat(dx, 1, ny, nz)
     dy = repeat(dy, nx, 1, nz)
     dz = repeat(dz, nx, ny, 1)
+    # Magnitude of the displacement
     magnitudes = sqrt.(dx.^2 + dy.^2 + dz.^2)
     dx_norm = dx ./ magnitudes
     dy_norm = dy ./ magnitudes
     dz_norm = dz ./ magnitudes
+    # Radial component (units of voxels)
     radial_components = u .* dx_norm + v .* dy_norm + w .* dz_norm
-    return nanmean(radial_components)
+    return radial_components
 end
 
 function compute_com(mask, vector_field)
 	mask = label_components(mask)
 	areas = component_lengths(mask)
+    # Biofilm = largest connected component
 	max_label = argmax(areas[1:end])
 	mask[mask .!= max_label] .= 0
 	mask[mask .== max_label] .= 1 
     center_of_mass_images = component_centroids(mask)[1]
     relative_com = [x for x in center_of_mass_images] ./ [x for x in size(mask)] 
+    # Switch to physical coordinates
     center_of_mass_images = [center_of_mass_images[2], center_of_mass_images[1], center_of_mass_images[3]]
     relative_com = [relative_com[2], relative_com[1], relative_com[3]]
+    # Convert center of mass to PIV coordinates
     center_of_mass_vectors = relative_com .* [x for x in size(vector_field)] .- 1
+    # Set z = 0 (center of mass at the bottom of the biofilm)
     center_of_mass_vectors[3] = 0
-	return center_of_mass_vectors
+	return center_of_mass_vectors, center_of_mass_images
 end
 
 function main()
@@ -114,7 +124,6 @@ function main()
     rbmB_seen = false
     lapG_seen = false
     bulk_files = [f for f in readdir(plots_folder, join=true) if occursin("processed.csv", f)]
-    logocolors = Colors.JULIA_LOGO_COLORS
     WT_averages = []
     cheY_averages = []
     rbmB_averages = []
@@ -134,8 +143,10 @@ function main()
         u_tot = zeros(Float32, width, height, depth)
         v_tot = zeros(Float32, width, height, depth)
         w_tot = zeros(Float32, width, height, depth) 
+        # Calculate total displacement
         for i in first_idx:end_idx 
             u, v, w, flags = load(piv_files[i], "u", "v", "w", "flags")
+            # Set spurious vectors to 0
             u[flags .> 0] .= 0
             v[flags .> 0] .= 0
             w[flags .> 0] .= 0
@@ -150,7 +161,6 @@ function main()
         lab = choose_label(vector_folder)
         if lab == "WT"
             push!(WT_averages, divergences)
-            c = logocolors.blue
             if WT_seen
                 condition = ""
             else
@@ -160,7 +170,6 @@ function main()
             end
         elseif lab == "cheY"
             push!(cheY_averages, divergences)
-            c = logocolors.green
             if cheY_seen
                 condition = ""
             else
@@ -180,7 +189,6 @@ function main()
             end
         elseif lab == "lapG"
             push!(lapG_averages, divergences)
-            c = logocolors.purple
             if lapG_seen
                 condition = ""
             else
@@ -190,7 +198,7 @@ function main()
             end
         end
     end
-    data = vcat(WT_averages, cheY_averages, rbmB_averages, lapG_averages) .* 0.065
+    data = vcat(WT_averages, cheY_averages, rbmB_averages, lapG_averages) .* 0.065 # Convert from image voxels to µm
     writedlm("$(plots_folder)/Fig4F.csv", data, ",")
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(cheY_averages)))
     @show pvalue(UnequalVarianceTTest(Float64.(WT_averages), Float64.(lapG_averages)))

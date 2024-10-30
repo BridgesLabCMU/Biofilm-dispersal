@@ -52,17 +52,23 @@ function main()
         height, width, slices = size(dummy_image)
         timeseries = zeros(Gray{N0f16}, height, width, slices, ntimepoints)
         read_images!(images_folder, ntimepoints, timeseries, files)
-        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1)) # TODO: Change to WarpedView
+        # Make the timeseries isotropic in z
+        timeseries = imresize(timeseries, ratio=(1,1,0.3/0.065,1))
         height, width, slices, ntimepoints = size(timeseries)
+        # Separate intensity threshold at each z-slice
         intensity_thresholds = zeros(slices)
+        # Find the thresholds
         mask_thresholds!(timeseries, intensity_thresholds, slices, 3.0e-5)
         masks = zeros(Bool, height, width, slices, ntimepoints)
         for i in 1:slices
             masks[:,:,i,:] = @views timeseries[:,:,i,:] .> intensity_thresholds[i]
         end
         timeseries = nothing
+        # Write the isotropic masks
         write_images!(masks, ntimepoints, images_folder)
+        # Calculate biovolume (sum of all binary voxels for each timepoint) 
         @views net = sum(masks, dims=(1:3))[1,1,1,:] 
+        # Write intensity thresholds and biovolumes
         writedlm("$(plots_folder)/$(filename).csv", net, ",")
         writedlm("$(images_folder)/isotropic_intensity_thresholds.csv", intensity_thresholds, ",")
         masks = nothing

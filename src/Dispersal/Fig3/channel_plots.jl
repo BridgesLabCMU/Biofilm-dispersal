@@ -27,20 +27,26 @@ function choose_label(folder)
 end
 
 function calculate_radial_component(u, v, w, dx,dy,dz, central_point)
+    # Vector field comes in in units of voxels
+    # Function to calculate radial components, given PIV vector field, 
     nx, ny, nz = size(u)
+    # Get grid coordinates (in grid units)
     x = reshape(1:nx, nx, 1, 1)
     y = reshape(1:ny, 1, ny, 1)
     z = reshape(1:nz, 1, 1, nz)
+    # Grid coordinates relative to the center of mass
     dx = x .- central_point[1]
     dy = y .- central_point[2]
     dz = z .- central_point[3]
 	dx = repeat(dx, 1, ny, nz)
     dy = repeat(dy, nx, 1, nz)
     dz = repeat(dz, nx, ny, 1)
+    # Magnitude of the displacement
     magnitudes = sqrt.(dx.^2 + dy.^2 + dz.^2)
     dx_norm = dx ./ magnitudes
     dy_norm = dy ./ magnitudes
     dz_norm = dz ./ magnitudes
+    # Radial component (units of voxels)
     radial_components = u .* dx_norm + v .* dy_norm + w .* dz_norm
     return radial_components
 end
@@ -48,14 +54,18 @@ end
 function compute_com(mask, vector_field)
 	mask = label_components(mask)
 	areas = component_lengths(mask)
+    # Biofilm = largest connected component
 	max_label = argmax(areas[1:end])
 	mask[mask .!= max_label] .= 0
 	mask[mask .== max_label] .= 1 
     center_of_mass_images = component_centroids(mask)[1]
     relative_com = [x for x in center_of_mass_images] ./ [x for x in size(mask)] 
+    # Switch to physical coordinates
     center_of_mass_images = [center_of_mass_images[2], center_of_mass_images[1], center_of_mass_images[3]]
     relative_com = [relative_com[2], relative_com[1], relative_com[3]]
+    # Convert center of mass to PIV coordinates
     center_of_mass_vectors = relative_com .* [x for x in size(vector_field)] .- 1
+    # Set z = 0 (center of mass at the bottom of the biofilm)
     center_of_mass_vectors[3] = 0
 	return center_of_mass_vectors, center_of_mass_images
 end
@@ -101,6 +111,7 @@ function main()
         # Calculate cumulative displacements
         for i in first_index:end_index
             u, v, w, flags = load(files[i], "u", "v", "w", "flags")
+            # Set spurious vectors to 0
             u[flags .> 0] .= 0
             v[flags .> 0] .= 0
             w[flags .> 0] .= 0
@@ -112,7 +123,9 @@ function main()
             w_plot += permutedims(w, (2,1,3))
         end
     
+        # Calculate center of mass from a biofilm mask and convert to PIV coordinates
         center_of_mass, com_images = compute_com(mask_t1, u_plot)
+        # Calculate the radial component of the velocity field wrt the center of mass
         radial_component = calculate_radial_component(u_plot, v_plot, w_plot.*4, 8, 8, 8, center_of_mass)
 
         # Calculate local mean, std
@@ -129,7 +142,10 @@ function main()
         distance = sqrt.(u_plot.^2 .+ v_plot.^2 .+ w_plot.^2)
         mean_distance = sqrt.(u_mean.^2 .+ v_mean.^2 .+ w_mean.^2)
 
+        # Calculate channel volume fraction (setting a threshold that the radial component mean should
+        # be bigger than the local mean plus 4 image voxels = 4*0.065 = 0.260 µm)
         channel_volume = sum(radial_component .> radial_component_mean .+ 4) / sum(distance .>= 0)
+
         lab = choose_label(folder)
         if lab == "WT"
             push!(WT_averages, channel_volume)

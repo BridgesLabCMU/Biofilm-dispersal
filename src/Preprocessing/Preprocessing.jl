@@ -1,3 +1,6 @@
+################################################## 
+# Utility functions for 3D image registration
+
 function phase_offset(source, target; kwargs...)
     plan = plan_fft(source)
     return phase_offset(plan, plan * source, plan * target; kwargs...)
@@ -104,16 +107,8 @@ function crop(img_stack)
     return cropped_stack
 end
 
-function rolling_ball!(timeseries, noback, slices, frames)
-    @floop for t in 1:frames
-        @inbounds for i in 1:slices
-            noback[:,:,i,t] = @views tophat(timeseries[:,:,i,t]; r=15)
-        end
-    end
-    return nothing
-end
-
 function register!(img_stack, registered_stack, nframes, center)       
+    # Register all images to the first image in the stack
     shifts = (0.0,0.0,0.0)
     registered_stack[:,:,:,1] = img_stack[:,:,:,1]
     for t in 2:nframes
@@ -126,8 +121,20 @@ function register!(img_stack, registered_stack, nframes, center)
     end
     return nothing
 end
+################################################## 
+
+function rolling_ball!(timeseries, noback, slices, frames)
+    # Rolling ball background subtraction
+    @floop for t in 1:frames
+        @inbounds for i in 1:slices
+            noback[:,:,i,t] = @views tophat(timeseries[:,:,i,t]; r=15)
+        end
+    end
+    return nothing
+end
 
 function timepoint_mask!(timeseries, first_timepoints, nframes, cell_threshold)
+    # Function to isolate image regions where cells appear before planktonic accumulation
     @inbounds for t in 1:nframes 
         @views mask = (timeseries[:,:,:,t] .> cell_threshold) .& (first_timepoints .== -1)
         first_timepoints[mask] .= t
@@ -136,6 +143,7 @@ function timepoint_mask!(timeseries, first_timepoints, nframes, cell_threshold)
 end
 
 function timepoint_threshold(timeseries, height, width, slices, frames, cell_threshold)
+    # Function to find the timepoint at which planktonic cells begin to accumulate
     first_timepoints = fill(-1, (height, width, slices))
     timepoint_mask!(timeseries, first_timepoints, frames, cell_threshold)
     timepoint_thresh = find_threshold(first_timepoints, Otsu())
@@ -143,6 +151,7 @@ function timepoint_threshold(timeseries, height, width, slices, frames, cell_thr
 end
 
 function mask_thresholds!(timeseries, intensity_thresholds, slices, cell_threshold)
+    # Auto intensity threshold each z-slice independently
     @floop for i in 1:slices 
         @views slice_ = timeseries[:, :, i, :]
         otsu_thresh = find_threshold(slice_, Otsu())
@@ -154,7 +163,6 @@ function mask_thresholds!(timeseries, intensity_thresholds, slices, cell_thresho
     end
     return nothing 
 end
-
 
 function write_images!(timeseries, frames, dir)
     @floop for t in 1:frames

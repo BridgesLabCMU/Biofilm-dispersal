@@ -1,3 +1,5 @@
+# See channel_plots.jl for details on methods
+
 using FileIO 
 using Makie 
 using GLMakie

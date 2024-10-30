@@ -49,6 +49,7 @@ end
 neighboridx(j) = [(j[1]+y, j[2]+x, j[3]+z) for y in -1:1, x in -1:1, z in -1:1]
 
 function corr_to_disp!(corr, U, V, W, grid_idx)
+    # Function to convert correlation array to a 3D displacement 
     corr_center = div.(size(corr), 2)
     val, peak = firstPeak(corr)
     if any(i == 1 for i in peak) || any(peak .== size(corr)) 
@@ -73,6 +74,7 @@ function corr_to_disp!(corr, U, V, W, grid_idx)
 end
 
 function compute_snr!(corr, SNR, grid_idx, method) 
+    # Function to compute signal-to-noise ratio of the correlation array
     max2 = 0.0 
     h, w, d = size(corr,1), size(corr,2), size(corr,3)
     max1, idx1 = firstPeak(corr) 
@@ -103,6 +105,8 @@ function compute_displacements!(image1, image2, window_size, x, y, z,
     corr = zeros(Float32, window_size[1], window_size[2], window_size[3])
     plan = FFTW.plan_fft!(window2)  
     iplan = FFTW.plan_ifft!(window2)
+
+    # For each window, compute a cross-correlation matrix, convert to a displacement, compute signal-to-noise ratio
     @inbounds for k in z 
         @inbounds for i in x 
             @inbounds for j in y 
